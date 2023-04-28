@@ -1,0 +1,98 @@
+(00000) Implement a column-cutting minigame, column inlet-placement minigame
+
+(00000) Add an integration feature for peak area as well as peak width that can be marked on the linechart
+
+(0000) Add a label for when you hit inject (inserts an arrow onto the linechart coordinate system marking this)
+
+(000) Implement a Column switching feature (and column alert for buying a new one when you destroy it)
+
+(00) Implement a "Sensor" that allows you to watch up to 5 peaks elution time values.
+
+(0) Use Oracle's guide for implementing javaFX app on the web
+ - Deploying JavaFX application 7
+ - Make a git branch main and git branch web (the web branch will contain a Jar file, Web Page, Document for the Web)
+
+(0) Implement a "Watch Recent" zoom profile that autozooms to the past 45 seconds and projects into the next 15 seconds.
+
+(0) Implement A filter function for the Inject Window that binds InjectionUIRecord visibility to filtered search terms
+
+(0) Implement simulation speed feature (allow to toggle between 1.0X - 5.0X)
+
+(10) Implement density data for each analyte -- OR NOT
+
+(4) Implement a label next to the userInputChemicals that shows the on-column weight of each userInputChemical
+
+(1) Implement the Injection Presets (use an accordion in the left pane of the Inject Button UI)
+
+(3) Add locking and lazy thread initilization to increase performance of Inject Button
+
+(5) Implement peak response feature. This should be done by turning the molar response factors into a relative scale
+    of arbitrary peak areas that are fairly human reading. For example, consider a typical mass that could be injected
+    on-column such as 133 ng of methyl octanoate. Methyl octanoate has a molar response factor of ~1. 133 ng of methyl
+    octanoate is equal to 8.4e-10 moles of methyl octanoate. It is not very readable to say that the area of methyl
+    octanoate is 8.4e-10 arbitrary units of area. It is better to multiply the number of moles by a constant to yield,
+    lets say, 500 arbitary units of area. A proportionalityConstant = 5.952e11 * 8.4e-10 moles = 500 peak area units.
+
+(6) Implement the ExceedingMaxTemp feature
+    DONE: Max temp of column can be exceeded and will result in column breaking for all columns in temperature dependent
+    rate and manner
+    (6)(A) Implement a reduction of the LSER constants based on temp
+    (6)(B) Implement a random peak generator for when the column is being destroyed
+
+(7) columnAdjustedOverloadMass should be implemented.
+    (7)(A) Use the overloadMass_1 as described in README.
+
+(8) A fast forward/FINISH RUN button must be implemented. If the usefulness of this program is that it allows
+    the retentionTimes, relative peak areas, to be predicted roughly correctly... it would be nice to go faster and just
+    get to the point.
+
+(9) Refactor Column code so that DB_1701 and HP_Innowax columns are based on the film thickness 1.0 um versions
+    DONE: implemented
+
+(10) Implement helper tips that show up on the screen when triggered:
+    (10)(A) Example: if nearly ALL the peaks are exhibiting peak fronting, suggest using a column with a higher
+            sample loading capacity (thicker film) or suggest increasing split ratio or suggest lowering concentration
+            on sample.
+    (10)(B) Example: if user raises the oven temperature above the column max temperature, the baseline should start to
+            get really bad and random peaks should start to generate (broken off pieces of stationary phase). After 10
+            seconds of this or so, alert a helper tip that suggests "You may have noticed your baseline is behaving
+            really strangely... why do you think this is happening?" then another helper tip 10 seconds later that says
+            "Oven Temp has exceeded max column temp! It's been destroyed! Now you will have to beg Dr. Travis for
+            hundreds of dollars to replace the column!"
+
+(11) Implement a "Learning Tip:" feature that is served to the user at application startup.
+    (11)(A) "Learning Tip: LET'S BREAK STUFF! The DB225 column has a max temp of 240 degrees. Install it, then set the
+            oven to 350 and see what happens!"
+    (11)(B) "Learning Tip: Ask ChatGPT "Could you describe the intermolecular forces that determine how strongly a
+            molecule interacts with the stationary phase in a GC capillary column?"
+    (11)(C) ... TOPICS: retention time, peak area, LSER constants, peak shape, why columns have a max temperature, etc.
+    (11)(D)
+            What is Gas Chromatography-Flame Ionization Detector (GC-FID) and how does it work?
+            What are the main components of a GC-FID system and their functions?
+            How do sample preparation and injection techniques affect the performance of a GC-FID analysis?
+            What are the key parameters to consider when optimizing a GC-FID method for a specific application?
+            Can you provide an overview of the most common stationary and mobile phases used in GC-FID?
+            How does the Flame Ionization Detector (FID) work, and what are its advantages and limitations?
+            What types of compounds can be analyzed using GC-FID, and what are some typical applications of this technique?
+            How do you interpret the results obtained from a GC-FID analysis, such as retention times, peak shapes, and area counts?
+            What are some common issues and troubleshooting steps in GC-FID analysis, and how can they be resolved?
+            How does GC-FID compare to other chromatographic techniques like GC-MS, HPLC, and LC-MS in terms of sensitivity, selectivity, and applications?
+            How do temperature control and programming affect separation and detection in GC-FID analysis?
+            What are some best practices for maintaining and cleaning a GC-FID system to ensure accurate and consistent results?
+            Can you provide examples of industry standards and regulations that involve the use of GC-FID analysis?
+            How do different column dimensions, materials, and packing influence the separation efficiency and resolution in GC-FID?
+            What is the role of the internal standard in quantitative GC-FID analysis, and how is it selected and used?
+            How can peak tailing and other chromatographic anomalies be minimized or corrected in GC-FID analysis?
+            What are some derivatization techniques used in GC-FID to improve the detection and analysis of certain compounds?
+            How do you determine the limit of detection (LOD) and limit of quantification (LOQ) in a GC-FID method?
+            Can you explain how the use of reference materials and quality control samples is important in GC-FID analysis for method validation?
+            What are some recent advancements and future trends in the field of GC-FID technology and its applications?
+
+(12) Make sure that if you switch to a new column, get the appropriate values of CURRENT_COLUMN_DAMAGE and REMAINING
+     from the columnToDamage HashMap.
+    (12)(A) The only way to update the columnToDamage HashMap is the "Buy new Column" button that resets these values to
+            0 for the newly purchased column. Make sure that the UI hastles you and references begging Travis for money.
+
+(13) Add a Restart Simulation button
+
+(14) Implement InjectionMiniGame button
