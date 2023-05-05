@@ -2,11 +2,15 @@ package com.karimbouchareb.chromatographysimulator;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.control.*;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import org.controlsfx.control.CheckComboBox;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.PriorityQueue;
+import java.util.TreeSet;
 import java.util.function.Function;
 
 public class Scratch {
@@ -68,10 +72,11 @@ public class Scratch {
     }
 
     public static void main(String[] args) {
-        int currentFrameRate = 10;
-        int newFrameRate = (currentFrameRate-10)%50;
-        if (newFrameRate == 0) newFrameRate = 50;
-        System.out.println(newFrameRate);
+
+
+
+
+
     }
 }
 

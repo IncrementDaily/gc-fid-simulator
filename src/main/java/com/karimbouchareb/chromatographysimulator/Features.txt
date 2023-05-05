@@ -1,0 +1,6 @@
+(1) When max temp is exceeded, columns respond with damage and changing responses
+(2) Each column has been validated against real-life experimental data from the manufacturers COA. Each column correctly
+    predicts elution order. todo EVENTUALlY!
+(3) 9 columns available which are genuinely commercially available
+(4) 263 compounds are available to simulate
+(5)

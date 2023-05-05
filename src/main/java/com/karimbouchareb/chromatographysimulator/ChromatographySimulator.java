@@ -72,7 +72,7 @@ public class ChromatographySimulator extends Application {
     private static final double FRAME_LENGTH_S = 0.05; // 0.05 seconds per frame
     private static double CURRENT_TIME = 0;  // elapsedTime in seconds
     // PEAK & COLUMN FIELDS
-    private static List<Peak> ANALYTES_IN_COLUMN = new ArrayList<>();
+    private static TreeSet<Peak> ANALYTES_IN_COLUMN = new TreeSet<>();
     private static Column CURRENT_COLUMN = Column.SPB_OCTYL;
     private static HashMap<Column, Double[]> columnToDamAndRem = new HashMap<>();
     private static double CURRENT_COLUMN_DAMAGE = 0.0;
@@ -92,6 +92,12 @@ public class ChromatographySimulator extends Application {
     protected static double currentTime(){
         return CURRENT_TIME;
     }
+    // This method is called every time run() is called. run() advances the state of the simulation by one discrete step.
+    // Every call to run() advances the internal clock of the simulation by 0.05 seconds; this is true regardless of
+    // whether the simulation is at 1X, 2X, 3X, 4X, or 5X speed. At 1X speed, run() is called every 50 milliseconds. At
+    // 5X speed, run() is called every 10 milliseconds. Performance may therefore suffer at 5X speed as ALL computation
+    // that must be performed to advance the state of the simulation to the next discrete step must be performed in 10
+    // milliseconds rather than 50 milliseconds.
     private static void incCurrentTime(){
         CURRENT_TIME += FRAME_LENGTH_S;
     }
@@ -153,7 +159,7 @@ public class ChromatographySimulator extends Application {
                     };
                     peakTailingIndex = Peak.IDEAL_PEAK_TAILING_INDEX;
                     if(MachineSettings.IS_COLUMN_CUT_POORLY){
-                        peakTailingIndex = 2.1;
+                        peakTailingIndex = 2.1; // TODO: 5/3/2023 IMPLEMENT THIS WELL EVENTUALLY
                     }
 
                     Peak currentPeak = new Peak.Builder(analyte,peakArea,injectionTime)
@@ -166,43 +172,9 @@ public class ChromatographySimulator extends Application {
 
                 }
             }
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
-        /*Peak peak4 = new Peak.Builder(new Chemical("102-01-2"),0.1)
-                .ascendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .descendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .build();
-        Peak peak5 = new Peak.Builder(new Chemical("102-01-2"),0.1)
-                .ascendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .descendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .build();
-        Peak peak6 = new Peak.Builder(new Chemical("102-01-2"),0.1)
-                .ascendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .descendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .build();
-        Peak peak7 = new Peak.Builder(new Chemical("102-01-2"),0.1)
-                .ascendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .descendingCurve(100,Peak.calcRetentionTime(new Chemical("102-01-2")),0.1)
-                .build();*/
-
-      /*  "80-56-8"
-        "122-40-7"
-        "53-41-8"
-        "62-53-3"
-        "123-11-5"
-        "100-66-3"
-        "120-12-7"
-        "84-65-1"
-        "275-51-4"*/
-
-        /*ANALYTES_IN_COLUMN.add(peak1);
-        ANALYTES_IN_COLUMN.add(peak2);
-        ANALYTES_IN_COLUMN.add(peak3);*/
-
     }
     // COLUMN / OVEN METHODS
     private static boolean columnMaxTempExceeded(){
@@ -236,8 +208,18 @@ public class ChromatographySimulator extends Application {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         return spacer;
     }
-
-
+    private ImageView makeImageView(String filePath) {
+        ImageView imageView = null;
+        URL imageUrl = getClass().getClassLoader().getResource(filePath);
+        if (imageUrl != null) {
+            Image image = new Image(imageUrl.toString());
+            imageView = new ImageView(image);
+            return imageView;
+        } else {
+            System.out.println("Shit fuck fuck FUCK file not found");
+            return null;
+        }
+    }
 
 // TOP-LEVEL STATIC MEMBER CLASSES
     // TODO: 4/17/2023 WILL HOLD CARRIER GAS VELOCITY CONSTANT AT 40 cm/s ... PERHAPS IN FUTURE THIS COULD BE ADJUSTABLE
@@ -260,7 +242,7 @@ public class ChromatographySimulator extends Application {
 
         // OVEN-TEMPERATURE OPERATIONAL METHODS
         public static void nudgeOvenTempUp(){
-            OVEN_TEMPERATURE = Math.min(OVEN_TEMPERATURE + 0.11, OVEN_TEMPERATURE_TARGET);
+            OVEN_TEMPERATURE = Math.min(OVEN_TEMPERATURE + 0.10, OVEN_TEMPERATURE_TARGET);
         }
         public static void nudgeOvenTempDown(){
             OVEN_TEMPERATURE = Math.max(OVEN_TEMPERATURE - 0.06, OVEN_TEMPERATURE_TARGET);
@@ -283,12 +265,12 @@ public class ChromatographySimulator extends Application {
             // Generate a random value with a normal distribution to represent the baseline noise level
             Random random = new Random();
             if (CURRENT_COLUMN_REMAINING < 1.0){
-                meanNoise = (meanNoise * CURRENT_COLUMN_REMAINING)+0.2;
-                stdDevNoise = (stdDevNoise * CURRENT_COLUMN_REMAINING)+0.02;
+                meanNoise = (meanNoise * CURRENT_COLUMN_REMAINING)+0.1;
+                stdDevNoise = (stdDevNoise * CURRENT_COLUMN_REMAINING)+0.001;
             }
             double noise = meanNoise + stdDevNoise * random.nextGaussian();
             // Add extra noise to baseline if column is overheated & damaged
-            if (CURRENT_COLUMN_DAMAGE > 0.0 && CURRENT_COLUMN_REMAINING != 0.0) {
+            if (CURRENT_COLUMN_DAMAGE > 0.0 && CURRENT_COLUMN_REMAINING >= 0.0001) {
                 double meanColumnDamageNoise = (CURRENT_COLUMN_DAMAGE*9.0)*CURRENT_COLUMN_REMAINING;
                 double stDevColumnDamageNoise = (CURRENT_COLUMN_DAMAGE*0.2)*CURRENT_COLUMN_REMAINING;
                 double nextPosGaussian = Math.abs(random.nextGaussian());
@@ -541,17 +523,19 @@ public class ChromatographySimulator extends Application {
 
             String csvFile = "src/main/java/com/karimbouchareb/chromatographysimulator/chemicalData.csv";
             try (FileReader fileReader = new FileReader(csvFile);
-                 CSVParser parser = CSVFormat.DEFAULT.parse(fileReader)) {
+                 CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
+                         "CAS","chemicalName","label","MRF","molecularWeight",
+                         "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
                 for (CSVRecord record : parser) {
                     if (record.get(1).equals(chemicalName)){
                         this.chemicalName = record.get(1);
-                        this.molarResponseFactor = Double.parseDouble(record.get(3));
-                        this.molecularWeight = Double.parseDouble(record.get(4));
-                        this.overloadMass_1 = Double.parseDouble(record.get(5));
-                        this.e = Double.parseDouble(record.get(6));
-                        this.s = Double.parseDouble(record.get(7));
-                        this.a = Double.parseDouble(record.get(8));
-                        this.l = Double.parseDouble(record.get(9));
+                        this.molarResponseFactor = Double.parseDouble(record.get("MRF"));
+                        this.molecularWeight = Double.parseDouble(record.get("molecularWeight"));
+                        this.overloadMass_1 = Double.parseDouble(record.get("overloadMass_1"));
+                        this.e = Double.parseDouble(record.get("E"));
+                        this.s = Double.parseDouble(record.get("S"));
+                        this.a = Double.parseDouble(record.get("A"));
+                        this.l = Double.parseDouble(record.get("L"));
                         break;
                     }
                 }
@@ -588,11 +572,13 @@ public class ChromatographySimulator extends Application {
     		return chemicalName;
         }
     }
-    private static class Peak {
+    private static class Peak implements Comparable {
         private final Chemical analyte;
         private final double peakArea;
-        private double elutionTime;
         private final double injectionTime;
+        private double proportionOfColumnTraversed = 0.0; // Range from 0.0 to 1.0;
+        private AtomicBoolean isEluting = new AtomicBoolean(false);
+        private double elutionTime;
         private GaussianCurve ascendingCurve;
         private GaussianCurve descendingCurve;
         private static final double IDEAL_PEAK_BROADENING_INDEX = 1.0;
@@ -601,7 +587,7 @@ public class ChromatographySimulator extends Application {
         private double peakTailingIndex = 1.0;
         private double peakFrontingIndex = 1.0;
         private double peakBroadeningIndex = 1.0;
-        private static final double PROPORTL_PEAK_BROAD_RT_COEFF = 0.0012;// Arbitrarily pegged to a value of peak
+        private static final double PEAK_BROAD_COEFF = 0.022;// Arbitrarily pegged to a value of peak
                                                                         // broadening that looked reasonable for a peak
                                                                     // that spent 20 minutes diffusing through column
 
@@ -651,14 +637,14 @@ public class ChromatographySimulator extends Application {
             this.peakTailingIndex = builder.peakTailingIndex;
             elutionTime = builder.analyte.calcRetentionTime() + injectionTime;
         }
-        private double calcElutionTime(){
+        /*private double calcElutionTime(){
             double currentHoldUpTime = CURRENT_COLUMN.holdUpTime(MachineSettings.getOvenTemperature());
             double retentionFactor = analyte.calcRetentionFactor();
             double elutionTime = currentHoldUpTime + (currentHoldUpTime*retentionFactor) + injectionTime;
             // cause non-deterministic behavior to the extent that column is severely damaged (default damage = 0.0)
             elutionTime += CURRENT_COLUMN_DAMAGE*(Math.random()*100.0);
             return elutionTime;
-        }
+        }*/
 
         // Math.max() method ensures that the updated retentionTime will not be LESS than currentTime()
         // otherwise the peak would not plot correctly. The updated retentionTime will be 3 frames after the currentTime().
@@ -668,6 +654,34 @@ public class ChromatographySimulator extends Application {
 
             // Update Peak Shape
             updatePeakShape();
+        }
+        private void traverseColumn(){ // called every time run() is called
+            if (isEluting.get()) {
+                return;
+            }
+            proportionOfColumnTraversed = Math.min(proportionOfColumnTraversed
+                    + traversalProgressPerSimulationStep() , 1.0);
+            if (proportionOfColumnTraversed == 1.0) isEluting.set(true);
+        }
+        private double traversalProgressPerSimulationStep(){
+            return FRAME_LENGTH_S/analyte.calcRetentionTime();
+        }
+        private double proportionOfColumnUntraversed(){
+            return 1.0 - proportionOfColumnTraversed();
+        }
+        private double proportionOfColumnTraversed(){
+            return proportionOfColumnTraversed;
+        }
+        private int simulationStepsRemainingUntilPeakElutes(){
+            return (int) Math.ceil(proportionOfColumnUntraversed()
+                    /traversalProgressPerSimulationStep());
+        }
+        private double secondsRemainingUntilPeakElutes(){
+            return simulationStepsRemainingUntilPeakElutes() * FRAME_LENGTH_S;
+        }
+        public double calcElutionTime(){
+            elutionTime = currentTime() + secondsRemainingUntilPeakElutes();
+            return elutionTime;
         }
 
         public double getElutionTime() {
@@ -683,7 +697,7 @@ public class ChromatographySimulator extends Application {
         }
         public void updatePeakShape(){
             // Update peak widths based on circumstances
-            peakBroadeningIndex = IDEAL_PEAK_BROADENING_INDEX + analyte.calcRetentionTime()*PROPORTL_PEAK_BROAD_RT_COEFF;
+            peakBroadeningIndex = IDEAL_PEAK_BROADENING_INDEX + analyte.calcRetentionTime()* PEAK_BROAD_COEFF;
 //            peakBroadeningIndex += CURRENT_COLUMN_DAMAGE*(Math.random()*2.0); // non-deterministic behavior if column damaged
             ascendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakFrontingIndex*peakBroadeningIndex);
             descendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakTailingIndex*peakBroadeningIndex);
@@ -701,6 +715,11 @@ public class ChromatographySimulator extends Application {
             }else{
                 return descendingCurve.apply(currentTime());
             }
+        }
+        @Override
+        public int compareTo(Object o){
+            Peak otherPeak = (Peak) o;
+            return Double.compare(getElutionTime(), otherPeak.getElutionTime());
         }
     }
     private static class InjectionUIRecord{
@@ -791,6 +810,7 @@ public class ChromatographySimulator extends Application {
         xAxis.setLabel("Time (s)");
         xAxis.setAutoRanging(false);
 
+
         // Create a NumberAxis for the y-axis (autoranging)
         final NumberAxis yAxis = new NumberAxis(0.0,80.0,10.0);
         yAxis.setLabel("Signal (Peak Area Units)");
@@ -816,7 +836,7 @@ public class ChromatographySimulator extends Application {
         // Create a data series and add to lineChart
         XYChart.Series<Number, Number> dataSeries = new XYChart.Series<>();
         lineChart.getData().add(dataSeries);
-        dataSeries.getNode().setStyle("-fx-stroke-width: 2;");
+        dataSeries.getNode().setStyle("-fx-stroke-width: 1;");
         lineChart.legendVisibleProperty().set(false);
 
 
@@ -857,16 +877,27 @@ public class ChromatographySimulator extends Application {
                 }
             });
 
+        // RESTART SIMULATION BUTTON
+       /* FontIcon restart = new FontIcon(FontAwesome.PAUSE);
+        pause.setIconColor(Color.BLACK);
+        pause.setIconSize(24);
+        Button restartSimulationButton = new Button();
+        simulationStateButton.setGraphic(play);
+        simulationStateButton.setPrefWidth(140);
+        simulationStateButton.setPrefHeight(45);*/
+
         // ELUTION TIME BUTTON
-        Button elutionTimes = new Button("get ElutionTimes");
+        Button elutionTimesButton = new Button("get ElutionTimes");
             // Action
-            elutionTimes.setOnAction(e -> {
+            elutionTimesButton.setOnAction(e -> {
             for(Peak peak : ANALYTES_IN_COLUMN){
-                System.out.print(peak.getElutionTime() + " eTime");
-                System.out.print(" peak Broad = " + peak.peakBroadeningIndex);
+                System.out.print(peak.analyte.toString() + " ");
+                System.out.print(String.format("%.1f", peak.getElutionTime()) + " eTime");
+                System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
+                /*System.out.print(" peak Broad = " + peak.peakBroadeningIndex);
                 System.out.print(" peak Front = " + peak.peakFrontingIndex);
-                System.out.print(" peak Tail = " + peak.peakTailingIndex);
-                System.out.println();
+                System.out.print(" peak Tail = " + peak.peakTailingIndex);*/
+//                System.out.println();
             }
             System.out.println();
         });
@@ -935,9 +966,9 @@ public class ChromatographySimulator extends Application {
                 currentTempVal.textProperty().bind(ovenTempProperty.asString("%.0f"));
                 HBox currentTemp = new HBox(currentTempMarker,currentTempVal);
 
-                Label info = new Label("Tip: The oven temperature is one of the primary means of ensuring good separation of peaks. Low temperatures cause chemicals to spend more time in the column. High temperatures speed them through. Play around with different programs!");
+                Label info = new Label("Tip: The oven temperature(s) you select for your method are of primary importance for ensuring good separation of peaks. Low temperatures cause chemicals to spend more time in the column. High temperatures speed them through. The selectivity parameters of your columns change with temperature as well. Play around!");
                 info.setWrapText(true);
-                info.setTextFill(Color.CORNFLOWERBLUE);
+                info.setTextFill(Color.DODGERBLUE);
                 info.setFont(Font.font(null, FontPosture.ITALIC, 10));
                 info.setMaxWidth(250);
 
@@ -1014,7 +1045,7 @@ public class ChromatographySimulator extends Application {
 
                 Label info = new Label("Tip: A split ratio of 126 means that only 1 out of every 127 gas particles injected into the inlet actually enters the column. The other 126 are \"split off\" and vented to waste. This reduces the mass of each analyte that enters the column. This can prevent asymmetric peak shapes caused by column overloading. Also, peaks will be smaller.");
                 info.setWrapText(true);
-                info.setTextFill(Color.CORNFLOWERBLUE);
+                info.setTextFill(Color.DODGERBLUE);
                 info.setFont(Font.font(null, FontPosture.ITALIC, 10));
                 info.setMaxWidth(270);
 
@@ -1266,7 +1297,6 @@ public class ChromatographySimulator extends Application {
                         double techniqueScoreCalc = Math.abs(oscillator.getBoundsInParent().getCenterX()
                                 - targetBox.getBoundsInParent().getCenterX());
                         techniqueScore.setValue(techniqueScoreCalc);
-                        System.out.println(techniqueScore.get());
                         if(techniqueScoreCalc < 19.0){
                             oscillator.setFill(Color.GREEN);
                         }else{
@@ -1311,6 +1341,25 @@ public class ChromatographySimulator extends Application {
             injectStage.show();
         });
 
+        // DETECTOR-OFF BUTTON
+        Button detectorOnOffButton = new Button();
+        FontIcon fire = FontIcon.of(FontAwesome.FIRE);
+        fire.setIconColor(Color.DODGERBLUE);
+        fire.setIconSize(24);
+        Label fid = new Label("FID");
+        fid.setFont(Font.font(null,FontWeight.BOLD,10));
+        HBox fidDetector = new HBox(fid,fire);
+        fidDetector.setAlignment(Pos.CENTER);
+        detectorOnOffButton.setGraphic(fidDetector);
+        detectorOnOffButton.setOnAction(e -> {
+            isDetectorOn.set(isDetectorOn.not().get());
+            if (isDetectorOn.get()) {
+                fire.setIconColor(Color.DODGERBLUE);
+            }else{
+                fire.setIconColor(Color.BLACK);
+            }
+        });
+
         // SWITCH COLUMN BUTTON
         Button switchColumnButton = new Button();
         FontIcon column = FontIcon.of(MaterialDesign.MDI_BLUR_LINEAR); // MDI CLOCK START
@@ -1326,35 +1375,46 @@ public class ChromatographySimulator extends Application {
         switchColumnButton.setPrefWidth(140);
         switchColumnButton.setPrefHeight(45);
         switchColumnButton.setOnAction( e1 -> {
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            /*Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.getDialogPane().setMaxWidth(350);
             alert.setHeaderText("Warning: Installing New Columns");
-            Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it. Also, if you have destroyed your current column by exceeding its max temperature, it will remain destroyed until you beg Dr. Travis for money to replace it (~$400).");
+            Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it.");
             columnWarning.setFont(Font.font(null, FontPosture.ITALIC,10));
-            columnWarning.setTextFill(Color.CORNFLOWERBLUE);
+            columnWarning.setTextFill(Color.DODGERBLUE);
             columnWarning.setWrapText(true);
             columnWarning.setMaxWidth(200);
             alert.getDialogPane().setContent(columnWarning);
 
             var result1 = alert.showAndWait();
-            if (result1.get().getButtonData().equals(ButtonBar.ButtonData.OK_DONE)){
+
+            if (result1.get().getButtonData().equals(ButtonBar.ButtonData.OK_DONE)){*/
                 ChoiceDialog<Column> columnChoices = new ChoiceDialog<>();
 
                 columnChoices.setTitle("Choose A Column");
-                SimpleBooleanProperty noneSelected = new SimpleBooleanProperty(true);
-                // Only allow the column to be changed if the "Oven is cold enough to open safely (less than 40 degrees)".
-                Button okButton = (Button) columnChoices.getDialogPane().lookupButton(ButtonType.OK);
-                okButton.disableProperty()
-                        .bind(ovenTempProperty.greaterThan(40.0)
-                        .or(isDetectorOn)); // TODO: 5/1/2023 CHANGE THIS TO BE TRUE IF NO BUTTONS ARE SELECTED
+                SimpleBooleanProperty noneSelected = new SimpleBooleanProperty();
+                noneSelected.bind(columnChoices.selectedItemProperty().isNull());
 
-                columnChoices.getDialogPane().setPrefWidth(550);
+                columnChoices.getItems().addAll(Column.SPB_OCTYL,
+                        Column.HP_5,Column.HP_INNOWAX, Column.DB_1701,
+                        Column.DB_225, Column.RTX_440, Column.RTX_OPP,
+                        Column.RXI_5SIL, Column.RXI_17);
+
+                // Only allow the column to be changed if oven is cold enough and FID detector is off and
+                // a selection has been made
+                Button installColumnButton = (Button) columnChoices.getDialogPane().lookupButton(ButtonType.OK);
+                installColumnButton.setText("Install Column");
+                installColumnButton.disableProperty()
+                        .bind(ovenTempProperty.greaterThan(40.0)
+                        .or(isDetectorOn)
+                        .or(noneSelected));
+
+                columnChoices.getDialogPane().setPrefWidth(750);
 
                 VBox columnChoicesRoot = new VBox();
                 columnChoicesRoot.setAlignment(Pos.BOTTOM_CENTER);
                 columnChoicesRoot.setPrefWidth(Region.USE_PREF_SIZE);
-                columnChoicesRoot.setPadding(new Insets(40,10,0,10));
-                columnChoicesRoot.setSpacing(15);
+                columnChoicesRoot.setPadding(new Insets(20,10,0,10));
+                columnChoicesRoot.setSpacing(3);
                     // Grid of Columns
                     GridPane columnChoicesGrid = new GridPane();
                     columnChoicesGrid.setAlignment(Pos.BOTTOM_CENTER);
@@ -1373,16 +1433,46 @@ public class ChromatographySimulator extends Application {
                     Button db1701Button = new Button();
                     db1701Button.setGraphic(db1701);
                     db1701Button.setOnAction(e -> {
-                        Alert db1701info = new Alert(Alert.AlertType.INFORMATION);
-                        db1701info.getDialogPane().setMaxWidth(350);
-                        db1701info.setHeaderText("DB-1701");
-                        Label db1701infoContent = new Label("");
-                        db1701infoContent.setFont(Font.font(null, FontWeight.BOLD,11));
-                        db1701infoContent.setTextFill(Color.CORNFLOWERBLUE);
-                        db1701infoContent.setWrapText(true);
-                        db1701infoContent.setMaxWidth(200);
-                        db1701info.getDialogPane().setContent(db1701infoContent);
-                        db1701info.show();
+                        Alert db1701Info = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) db1701Info.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.DB_1701);
+                        });
+                        db1701Info.getDialogPane().setPrefWidth(450);
+                        db1701Info.setHeaderText("DB-1701");
+                        ImageView stationaryPhase = makeImageView("DB-1701_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("14%: (poly)cyanopropylphenylsiloxane 86%: (poly)dimethylsiloxane");
+                        Label eInfo = new Label("Very Slight e-LonePair/Pi-Pi selection");
+                        Label sInfo = new Label("Moderate Dipole/Dipole Selection");
+                        Label aInfo = new Label("Moderate H-Bond selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        db1701Info.getDialogPane().setContent(selectivityInfo);
+                        db1701Info.show();
+                        // Engineered to be the same as HP-5, but with better thermal stability (higher maxTemp)
+                        // e: e- lone-pair interactions (e-0.201 -> e0.067) VERY SLIGHT RT INCREASE ; Label= Very Slight e-LonePair/Pi-Pi selection
+                        // s: Dipole/Dipole interactions (s0.877 -> s0.371) MODERATE RT INCREASE ; Label= Moderate Dipole/Dipole Selection
+                        // a: H-Bond accepting interactions (a0.984 -> a0.301) MODERATE RT INCREASE ; Label= Moderate H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.703 -> l0.244) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column2 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1396,16 +1486,46 @@ public class ChromatographySimulator extends Application {
                     Button db225Button = new Button();
                     db225Button.setGraphic(db225);
                     db225Button.setOnAction(e -> {
-                        Alert db225info = new Alert(Alert.AlertType.INFORMATION);
-                        db225info.getDialogPane().setMaxWidth(350);
-                        db225info.setHeaderText("DB-225");
-                        Label db225infoContent = new Label("");
-                        db225infoContent.setFont(Font.font(null, FontWeight.BOLD,11));
-                        db225infoContent.setTextFill(Color.CORNFLOWERBLUE);
-                        db225infoContent.setWrapText(true);
-                        db225infoContent.setMaxWidth(200);
-                        db225info.getDialogPane().setContent(db225infoContent);
-                        db225info.show();
+                        Alert db225Info = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) db225Info.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.DB_225);
+                        });
+                        db225Info.getDialogPane().setPrefWidth(450);
+                        db225Info.setHeaderText("DB-225");
+                        ImageView stationaryPhase = makeImageView("DB-225_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("50%: (poly)cyanopropylphenylsiloxane 50%: (poly)dimethylsiloxane");
+                        Label eInfo = new Label("Very Slight e-LonePair/Pi-Pi selection");
+                        Label sInfo = new Label("Strong Dipole/Dipole selection");
+                        Label aInfo = new Label("Strong H-Bond selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        db225Info.getDialogPane().setContent(selectivityInfo);
+                        db225Info.show();
+                        // Engineered to be the same as HP-5, but with better thermal stability (higher maxTemp)
+                        // e: e- lone-pair interactions (e-0.149 -> e0.109) VERY SLIGHT RT INCREASE ; Label= Very Slight e-LonePair/Pi-Pi selection
+                        // s: Dipole/Dipole interactions (s1.636 -> s0.735) STRONG RT INCREASE ; Label= Strong Dipole/Dipole selection
+                        // a: H-Bond accepting interactions (a1.595 -> a0.617) STRONG RT INCREASE ; Label= Strong H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.632 -> l0.226) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
 
                     });
 
@@ -1420,7 +1540,46 @@ public class ChromatographySimulator extends Application {
                     Button hp5Button = new Button();
                     hp5Button.setGraphic(hp5);
                     hp5Button.setOnAction(e -> {
-
+                        Alert hp5Info = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) hp5Info.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.HP_5);
+                        });
+                        hp5Info.getDialogPane().setPrefWidth(450);
+                        hp5Info.setHeaderText("HP-5");
+                        ImageView stationaryPhase = makeImageView("HP-5_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("5%: (poly)diphenylsiloxane 95%: (poly)dimethylsiloxane");
+                        Label eInfo = new Label("Very Slight e-LonePair/Pi-Pi selection");
+                        Label sInfo = new Label("Mild Dipole/Dipole selection");
+                        Label aInfo = new Label("Slight H-Bond selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        hp5Info.getDialogPane().setContent(selectivityInfo);
+                        hp5Info.show();
+                        // INFO:
+                        // e: e- lone-pair interactions (e-0.191 -> e0.099) VERY SLIGHT RT INCREASE ; label= Very Slight e-LonePair/Pi-Pi selection
+                        // s: Dipole/Dipole interactions (s0.436 -> s0.135) MILD RT INCREASE ; Label= Mild Dipole/Dipole selection
+                        // a: H-Bond accepting interactions (a0.380 -> a0.112) SLIGHT RT INCREASE ; Label= Slight H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.735 -> l0.210) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column4 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1434,7 +1593,46 @@ public class ChromatographySimulator extends Application {
                     Button rxi17Button = new Button();
                     rxi17Button.setGraphic(rxi17);
                     rxi17Button.setOnAction(e -> {
-
+                        Alert rxi17Info = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) rxi17Info.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.RXI_17);
+                        });
+                        rxi17Info.getDialogPane().setPrefWidth(450);
+                        rxi17Info.setHeaderText("Rxi-17");
+                        ImageView stationaryPhase = makeImageView("Rxi-17_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("50%: (poly)diphenylsiloxane 50%: (poly)dimethylsiloxane");
+                        Label eInfo = new Label("Slight e-LonePair/Pi-PI selection");
+                        Label sInfo = new Label("Moderate Dipole/Dipole Selection");
+                        Label aInfo = new Label("Mild H-Bond selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        rxi17Info.getDialogPane().setContent(selectivityInfo);
+                        rxi17Info.show();
+                        // Engineered to be the same as HP-5, but with better thermal stability (higher maxTemp)
+                        // e: e- lone-pair interactions (e0.006 -> e0.182) SLIGHT RT INCREASE ; Label= Slight e-LonePair/Pi-Pi selection
+                        // s: Dipole/Dipole interactions (s0.977 -> s0.380) MODERATE RT INCREASE ; Label= Moderate Dipole/Dipole Selection
+                        // a: H-Bond accepting interactions (a0.597 -> a0.180) MILD RT INCREASE ; Label= Mild H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.692 -> l0.240) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column5 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1448,7 +1646,48 @@ public class ChromatographySimulator extends Application {
                     Button rxi5SilButton = new Button();
                     rxi5SilButton.setGraphic(rxi5Sil);
                     rxi5SilButton.setOnAction(e -> {
-
+                        Alert rxi5SilInfo = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) rxi5SilInfo.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.RXI_5SIL);
+                        });
+                        rxi5SilInfo.getDialogPane().setPrefWidth(450);
+                        rxi5SilInfo.setHeaderText("Rxi-5Sil");
+                        ImageView stationaryPhase = makeImageView("Rxi-5Sil_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("5%: 1,4-Bis(dimethylsiloxy)phenylene 95%: (poly)dimethylsiloxane");
+                        Label eInfo = new Label("Slight e-LonePair/Pi-PI selection");
+                        Label sInfo = new Label("Mild Dipole/Dipole selection");
+                        Label aInfoLOW = new Label("Mild H-Bond selection (Low Temp)");
+                        Label aInfoHIGH = new Label("Slight H-Bond selection (High Temp)");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfoLOW,aInfoHIGH,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        rxi5SilInfo.getDialogPane().setContent(selectivityInfo);
+                        rxi5SilInfo.show();
+                        // Engineered to be the same as HP-5, but with better thermal stability (higher maxTemp)
+                        // e: e- lone-pair interactions (e-0.094 -> e0.111) SLIGHT RT INCREASE ; Label= Slight e-LonePair/Pi-PI selection
+                        // s: Dipole/Dipole interactions (s0.458 -> s0.121) MILD RT INCREASE ; Label= Mild Dipole/Dipole selection
+                        // a: H-Bond accepting interactions (a0.535 -> a0.133) LOW TEMP: MILD RT INCREASE ; Label= Low-Temp: Mild H-Bond selection
+                                                                            // HIGH TEMP: SLIGHT RT INCREASE ; Label= High-Temp: Slight H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.739 -> l0.185) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column6 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1462,7 +1701,45 @@ public class ChromatographySimulator extends Application {
                     Button hpInnowaxButton = new Button();
                     hpInnowaxButton.setGraphic(hpInnowax);
                     hpInnowaxButton.setOnAction(e -> {
-
+                        Alert hpInnowaxInfo = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) hpInnowaxInfo.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.HP_INNOWAX);
+                        });
+                        hpInnowaxInfo.getDialogPane().setPrefWidth(450);
+                        hpInnowaxInfo.setHeaderText("HP-Innowax");
+                        ImageView stationaryPhase = makeImageView("HP-Innowax_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("100% Polyethyleneglycol (cross-linking not shown)");
+                        Label eInfo = new Label("Slight e-LonePair/Pi-Pi selection");
+                        Label sInfo = new Label("Strong Dipole/Dipole selection");
+                        Label aInfo = new Label("Very Strong H-Bond selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        hpInnowaxInfo.getDialogPane().setContent(selectivityInfo);
+                        hpInnowaxInfo.show();
+                        // e: e- lone-pair interactions (e0.203 -> e0.232) SLIGHT RT INCREASE ; Label= Slight e-LonePair/Pi-Pi selection
+                        // s: Dipole/Dipole interactions (s1.682 -> s0.834) STRONG RT INCREASE ; Label= Strong Dipole/Dipole selection
+                        // a: H-Bond accepting interactions (a2.638 -> a1.068) VERY STRONG RT INCREASE ; Label= Very Strong H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.600 -> l0.246) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column7 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1476,7 +1753,47 @@ public class ChromatographySimulator extends Application {
                     Button rtxOPPButton = new Button();
                     rtxOPPButton.setGraphic(rtxOPP);
                     rtxOPPButton.setOnAction(e -> {
-
+                        Alert rtxOPPInfo = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) rtxOPPInfo.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.RTX_OPP);
+                        });
+                        rtxOPPInfo.getDialogPane().setPrefWidth(450);
+                        rtxOPPInfo.setHeaderText("Rtx-OPP");
+                        ImageView stationaryPhase = makeImageView("Rtx-OPP_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("\"Similar to 20% (poly)methyltrifluoropropylsiloxane 80% dimethyl\"");
+                        Label eInfoLOW = new Label("Mild to Slight e-LonePair/Pi-Pi Anti-Selection (Low Temp)");
+                        Label eInfoHIGH = new Label("Slight to Almost No e-LonePair/Pi-Pi Selection (High Temp)");
+                        Label sInfo = new Label("Moderate Dipole/Dipole selection");
+                        Label aInfo = new Label("Slight H-Bond selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfoLOW,eInfoHIGH,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        rtxOPPInfo.getDialogPane().setContent(selectivityInfo);
+                        rtxOPPInfo.show();
+                        // e: e- lone-pair interactions (e-0.451 -> e0.052) LOW TEMP: MILD TO SLIGHT RT DECREASE ; Label=Low Temp: Mild to Slight e-LonePair/Pi-Pi Anti-Selection
+                        //                                                  HIGH TEMP: SLIGHT TO ALMOST NO RT INCREASE ; Label=High Temp: Slight to Almost No e-LonePair/Pi-Pi Selection
+                        // s: Dipole/Dipole interactions (s1.161 -> s0.323) MODERATE RT INCREASE ; Label= Moderate Dipole/Dipole selection
+                        // a: H-Bond accepting interactions (a0.363 -> a0.120) SLIGHT RT INCREASE ; Label= Slight H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.650 -> l0.180) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column8 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1490,7 +1807,47 @@ public class ChromatographySimulator extends Application {
                     Button rtx440Button = new Button();
                     rtx440Button.setGraphic(rtx440);
                     rtx440Button.setOnAction(e -> {
-
+                        Alert rtx440Info = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) rtx440Info.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.RTX_440);
+                        });
+                        rtx440Info.getDialogPane().setPrefWidth(450);
+                        rtx440Info.setHeaderText("Rtx-440");
+                        ImageView stationaryPhase = makeImageView("Rtx-440_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("\"Similar to 6% (poly)cyanopropylphenylsiloxane 94% dimethyl\"");
+                        Label eInfo = new Label("Slight e-LonePair/Pi-Pi selection");
+                        Label sInfo = new Label("Mild Dipole/Dipole selection");
+                        Label aInfoLOW = new Label("Mild H-Bond selection (Low Temp)");
+                        Label aInfoHIGH = new Label("Slight H-Bond selection (High Temp)");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfoLOW,aInfoHIGH,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        rtx440Info.getDialogPane().setContent(selectivityInfo);
+                        rtx440Info.show();
+                        // e: e- lone-pair interactions (e-0.097 -> e0.131) SLIGHT RT INCREASE ; Label= Slight e-LonePair/Pi-Pi selection
+                        // s: Dipole/Dipole interactions (s0.541 -> s0.179) MILD RT INCREASE ; Label= Mild Dipole/Dipole selection
+                        // a: H-Bond accepting interactions (a0.480 -> a0.095) LOW TEMP: MILD RT INCREASE ; Label= Low-Temp: Mild H-Bond selection
+                                                                            // HIGH TEMP: SLIGHT RT INCREASE ; Label= High-Temp: Slight H-Bond selection
+                        // l: Cavity formation & dispersion interactions (l0.733 -> l0.226) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
 
                     FontIcon column9 = FontIcon.of(MaterialDesign.MDI_NEST_PROTECT);
@@ -1504,16 +1861,46 @@ public class ChromatographySimulator extends Application {
                     Button spbOctylButton = new Button();
                     spbOctylButton.setGraphic(spbOctyl);
                     spbOctylButton.setOnAction(e -> {
-                        Alert spbOctylInfo = new Alert(Alert.AlertType.INFORMATION);
-                        spbOctylInfo.getDialogPane().setMaxWidth(350);
+                        Alert spbOctylInfo = new Alert(Alert.AlertType.CONFIRMATION);
+                        Button selectButton = (Button) spbOctylInfo.getDialogPane().lookupButton(ButtonType.OK);
+                        selectButton.setText("Select Column");
+                        selectButton.setOnAction(e2 -> {
+                            columnChoices.setSelectedItem(Column.SPB_OCTYL);
+                        });
+                        spbOctylInfo.getDialogPane().setPrefWidth(450);
                         spbOctylInfo.setHeaderText("SPB-Octyl");
-                        Label spbOctylInfoContent = new Label("100% (poly)methyloctylsiloxane stationary phase. Nonpolar. Very low selectivity (there are almost no compounds or types of compounds which are especially retained by this column).");
-                        spbOctylInfoContent.setWrapText(true);
-                        spbOctylInfoContent.setTextFill(Color.CORNFLOWERBLUE);
-                        spbOctylInfoContent.setFont(Font.font(null, FontWeight.BOLD,11));
-                        spbOctylInfoContent.setMaxWidth(250);
-                        spbOctylInfo.getDialogPane().setContent(spbOctylInfoContent);
+                        ImageView stationaryPhase = makeImageView("SPB-Octyl_stationaryPhase.jpg");
+                        stationaryPhase.setPreserveRatio(true);
+                        stationaryPhase.setFitHeight(300.0);
+                        Label genInfo = new Label("50%: (poly)octylsiloxane 50%: (poly)dimethylsiloxane");
+                        Label eInfo = new Label("Slight e-LonePair/Pi-Pi Selection");
+                        Label sInfo = new Label("Almost No Dipole/Dipole Selection");
+                        Label aInfo = new Label("Almost No H-Bond Selection");
+                        Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
+                        selectivityInfo.setPadding(new Insets(20));
+                        selectivityInfo.setSpacing(7.0);
+                        selectivityInfo.setAlignment(Pos.CENTER);
+                        for (Node node : selectivityInfo.getChildren()){
+                            if (node instanceof ImageView) {
+                                ImageView stationaryPhaseImage = (ImageView) node;
+                                stationaryPhaseImage.setFitWidth(300);
+                                continue;
+                            }
+                            Label lserConstantInfo = (Label) node;
+                            lserConstantInfo.setWrapText(true);
+                            lserConstantInfo.setTextFill(Color.DODGERBLUE);
+                            lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
+                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setAlignment(Pos.CENTER);
+                        }
+                        spbOctylInfo.getDialogPane().setContent(selectivityInfo);
                         spbOctylInfo.show();
+                        // INFO:
+                        // e: e- lone-pair interactions (e0.142 -> e0.199) SLIGHT RT INCREASE ; Label=Slight e-LonePair/Pi-Pi Selection
+                        // s: Dipole/Dipole interactions (s0.092 -> s0.037) ALMOST NO RT INCREASE ; Label=Almost No Dipole/Dipole Selection
+                        // a: H-Bond accepting interactions (a0.088 -> a0.000) ALMOST NO RT INCREASE ; Label=Almost No H-Bond Selection
+                        // l: Cavity formation & dispersion interactions (l0.775 -> l0.263) MILD-MODERATE RT INCREASE ; Label=Mild-Moderate Cavity/Dispersion Selection
                     });
                     columnChoicesGrid.addRow(0,spbOctylButton,hp5Button,hpInnowaxButton);
                     columnChoicesGrid.addRow(1,db1701Button,db225Button,rtx440Button);
@@ -1525,44 +1912,32 @@ public class ChromatographySimulator extends Application {
                     }
 
                     // Warning message
-                    Label warningMessage = new Label("Error: FID Detector is Active and/or oven > 40 degrees");
-                    warningMessage.setTextFill(Color.RED);
-                    warningMessage.setFont(Font.font(null,FontWeight.BOLD,10));
-                    warningMessage.visibleProperty().bind(okButton.disabledProperty());
-                columnChoicesRoot.getChildren().addAll(columnChoicesGrid,warningMessage);
+                    Label warningMessage1 = new Label("Error: FID Detector is Active");
+                    warningMessage1.setTextFill(Color.RED);
+                    warningMessage1.setFont(Font.font(null,FontWeight.BOLD,10));
+                    warningMessage1.visibleProperty().bind(isDetectorOn);
+                    Label warningMessage2 = new Label("Error: Oven Temperature >= 40 degrees C");
+                    warningMessage2.setTextFill(Color.RED);
+                    warningMessage2.setFont(Font.font(null,FontWeight.BOLD,10));
+                    warningMessage2.visibleProperty().bind(ovenTempProperty.greaterThan(40.0));
+                    Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it.");
+                    columnWarning.setFont(Font.font(null, FontPosture.ITALIC,10));
+                    columnWarning.setTextFill(Color.DODGERBLUE);
+                    columnWarning.setWrapText(true);
+                    columnWarning.setMaxWidth(250);
+                    columnChoicesRoot.getChildren().addAll(columnWarning,
+                        columnChoicesGrid, warningMessage1,warningMessage2);
                 columnChoices.getDialogPane().setHeader(columnChoicesRoot);
-
-                columnChoices.getItems().addAll(Column.SPB_OCTYL,
-                        Column.HP_5,Column.HP_INNOWAX, Column.DB_1701,
-                        Column.DB_225, Column.RTX_440, Column.RTX_OPP,
-                        Column.RXI_5SIL, Column.RXI_17);
 
                 Optional<Column> result = columnChoices.showAndWait();
                 if (result.isPresent()) {
                     CURRENT_COLUMN = result.get();
                     columnName.setText(CURRENT_COLUMN.toString());
                 }
-            }
+            /*}*/
         });
 
-        // DETECTOR-OFF BUTTON
-        Button detectorOnOffButton = new Button();
-        FontIcon fire = FontIcon.of(FontAwesome.FIRE);
-        fire.setIconColor(Color.DODGERBLUE);
-        fire.setIconSize(24);
-        Label fid = new Label("FID");
-        fid.setFont(Font.font(null,FontWeight.BOLD,10));
-        HBox fidDetector = new HBox(fid,fire);
-        fidDetector.setAlignment(Pos.CENTER);
-        detectorOnOffButton.setGraphic(fidDetector);
-        detectorOnOffButton.setOnAction(e -> {
-                isDetectorOn.set(isDetectorOn.not().get());
-                if (isDetectorOn.get()) {
-                    fire.setIconColor(Color.DODGERBLUE);
-                }else{
-                    fire.setIconColor(Color.BLACK);
-                }
-        });
+
 
         // FAST-FORWARD BUTTON
         Button fastForwardButton = new Button();
@@ -1604,6 +1979,9 @@ public class ChromatographySimulator extends Application {
                                 // The amount of time this takes depends on how badly the column's max temp is exceeded
                                 if (columnMaxTempExceeded()) damageColumn();
 
+                                // Update split ratio
+                                splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
+
                                 // Update ovenTempProperty & check if temp is ramping or cooling, then nudge temp
                                 ovenTempProperty.set(MachineSettings.OVEN_TEMPERATURE);
                                 if (MachineSettings.TEMP_RAMPING.get()){
@@ -1622,7 +2000,7 @@ public class ChromatographySimulator extends Application {
                                 }
 
                                 // Update the peaks shape and elution times if the oven temp is ramping or cooling, if the
-                                // column is damaged at all, or run() has been called 40 times
+                                // column is damaged at all, or run() has been called 10 times with no updating
                                 if (MachineSettings.TEMP_RAMPING.get()
                                         || MachineSettings.TEMP_COOLING.get()
                                         || CURRENT_COLUMN_DAMAGE > 0.0
@@ -1636,19 +2014,21 @@ public class ChromatographySimulator extends Application {
                                             peak.updatePeak();
                                         }
                                     }
-                                    // reset runCounter, wait for another 40 run() calls
+                                    // reset runCounter, wait for another 10 run() calls
                                     runCounter=0;
                                 }
-
-                                // Update split ratio
-                                splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
+                                runCounter++;
+                                // After updating, make all peaks traverse the column
+                                for (Peak peak : ANALYTES_IN_COLUMN) {
+                                        peak.traverseColumn();
+                                }
 
                                 // Iterate through all the peaks and remove them if they have already eluted
                                 Iterator<Peak> peakIterator = ANALYTES_IN_COLUMN.iterator();
                                 while (peakIterator.hasNext()) {
                                     Peak peak = peakIterator.next();
                                     // Make sure the currentTime is well past the peaks non-negligible portion
-                                    if (currentTime() >= (peak.getElutionTime() + peak.descendingCurve.calcWidthOfHalfCurve()*3)) {
+                                    if (currentTime() >= (peak.getElutionTime() + peak.descendingCurve.calcWidthOfHalfCurve()*2)) {
                                         peakIterator.remove();
                                     }
                                 }
@@ -1666,10 +2046,9 @@ public class ChromatographySimulator extends Application {
                                 dataSeries.getData().add(new XYChart.Data<>(currentTime(), detectorSignal));
 
                                 // Remove any datapoints that are older than 30 minutes
-                                if (dataSeries.getData().size() > 36000) {
+                                if (dataSeries.getData().size() > 24000) {
                                     dataSeries.getData().remove(0);
                                 }
-                                runCounter++;
                             });
                         }
                     }, 0, FRAME_LENGTH_MS.get());
@@ -1735,7 +2114,7 @@ public class ChromatographySimulator extends Application {
             zoomInfo.setHeaderText("Examine peaks closely!");
             Label content = new Label("Tip: To see closeup(s) of peak(s), HOLD CTRL + CLICK & DRAG to draw a zooming rectangle. Examine peaks for asymmetry and overlapping with other peaks. This is especially important when your sample mixture contains dozens or hundreds of analytes!");
             content.setWrapText(true);
-            content.setTextFill(Color.CORNFLOWERBLUE);
+            content.setTextFill(Color.DODGERBLUE);
             content.setFont(Font.font(null, FontPosture.ITALIC, 10));
             content.setMaxWidth(250);
             zoomInfo.getDialogPane().setContent(content);
@@ -1889,11 +2268,12 @@ public class ChromatographySimulator extends Application {
         leftControls.getChildren().add(simulationStateButton);
         leftControls.getChildren().add(createVSpacer());
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
+        leftControls.getChildren().add(elutionTimesButton);
         leftControls.setAlignment(Pos.CENTER);
 
 
         // Create main scene and show main stage
-        Scene scene = new Scene(root, screenBounds.getWidth()-700, screenBounds.getHeight()-100 );
+        Scene scene = new Scene(root, screenBounds.getWidth()-100, screenBounds.getHeight()-100 );
         stage.setScene(scene);
         stage.show();
 
@@ -1907,7 +2287,7 @@ public class ChromatographySimulator extends Application {
 
             @Override
             public void run() {
-                // Initialize Paused
+                // Initialize Simulation in the Paused state
                 if (isInitialization) {
                     isPaused.set(true);
                     isInitialization = false;
@@ -1945,11 +2325,11 @@ public class ChromatographySimulator extends Application {
                     }
 
                     // Update the peaks shape and elution times if the oven temp is ramping or cooling, if the
-                    // column is damaged at all, or run() has been called 40 times
-                    if (MachineSettings.TEMP_RAMPING.get()
+                    // column is damaged at all, or run() has been called 10 times
+                    /*if (MachineSettings.TEMP_RAMPING.get()
                             || MachineSettings.TEMP_COOLING.get()
                             || CURRENT_COLUMN_DAMAGE > 0.0
-                            || runCounter%40 == 0) {
+                            || runCounter%10 == 0) {
                         for (Peak peak : ANALYTES_IN_COLUMN) {
                             // Check if the peak is eluting; if it is, don't update it.
                             if (currentTime() >= (peak.getElutionTime()
@@ -1959,8 +2339,19 @@ public class ChromatographySimulator extends Application {
                                 peak.updatePeak();
                             }
                         }
-                        // reset runCounter, wait for another 40 run() calls
+                        // reset runCounter, wait for another 10 run() calls
                         runCounter=0;
+                    }*/
+
+                    for (Peak peak : ANALYTES_IN_COLUMN) {
+                        // Check if the peak is eluting; if it is, don't update it.
+                        if (currentTime() >= (peak.getElutionTime()
+                                - peak.ascendingCurve.calcWidthOfHalfCurve())) {
+                            continue;
+                        } else {
+                            peak.updatePeak();
+                            peak.traverseColumn();
+                        }
                     }
 
                     // Update split ratio
@@ -1989,7 +2380,7 @@ public class ChromatographySimulator extends Application {
                     dataSeries.getData().add(new XYChart.Data<>(currentTime(), detectorSignal));
 
                     // Remove any datapoints that are older than 30 minutes
-                    if (dataSeries.getData().size() > 36000) {
+                    if (dataSeries.getData().size() > 24000) {
                         dataSeries.getData().remove(0);
                     }
                     runCounter++;
