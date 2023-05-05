@@ -1,3 +1,50 @@
+(0000000000000) Try to get an interview with Dr. Poole to ask him questions about the LSER model and Abraham's ABSOLV
+                data. Consider asking things like:
+                (1) Is the ABSOLV data accurate for use in predicting retention times in a GC open tubular system?
+                (2) Is your recent data (for example the data from your paper in 2019: "Gas chromatography system
+                    constant database over an extended temperature range for nine open-tubular columns") specifically more
+                    suited to GC open tubular columns compared to ABSOLV data from Abraham?
+                (3) "Abraham and co-workers [23–25] and Carr and co-workers[26–28] realized that the difficulty in
+                    applying the solvato-chromic parameters to retention in gas chromatography was that the spectroscopic
+                    methods used to assign descriptors to compounds were defined by excited state interactions and not
+                    equilibrium free energies responsible for retention in gas chromatography."
+                (4) Is there any sense to my idea that, maybe i'd use ABSOLV data, as long as I remove any data that has
+                any descriptors whose values are outside the min and max values for each of the descriptors' in your data?
+                (5) In your paper, you describe the e and s constants as follows: "The capability of the stationary
+                    phase for individual intermolecular interactions are defined as contributions from electron lone pair
+                    interactions (the excess dispersion interactions that result from the presence of polarizable
+                    electrons), e, interactions of a dipole-type (both orientation and induction), s". Does Abraham
+                    define his E,S,A, or L constants differently from you? For example, perhaps he includes induced
+                    dipole attractive forces in e instead of s, or something?
+
+(000000000000) Change your underlying data to use several thousand compounds from the ABSOLV database. Just use those.
+               These can be accessed using https://www.ufz.de/index.php?en=31698&contentonly=1&m=0&lserd_data[mvc]=Public/start
+               or https://www.ufz.de/index.php?en=31698.
+
+(00000000000) Implement feature of elutionTime vertical line indicators on the graph that also have a low-opacity peak
+                width region that shows the width of the peak to help visualize resolution/separation. Might as well
+                indicate amplitude/height as well.
+
+(0000000000) REMEMBER: When doing the COA validations, the c term is VERY important! Case in point: the SPB-Octyl COA for
+             1.0 um film thickness was VERY different than the one for 0.25 um film thickness. Much more closely matched
+             my SPB octyl column which is based on 1.0 um film thickness.
+
+(000000000) Implement controllable oven temperature ramp rate that changes how fast nudgeOvenTempUp() works
+
+(00000000) Implement inlet temperature and get boiling point data for each compound. If inlet temp is too far below
+           boiling, then this should cause increase in peak tailing index.
+
+(0000000) Implement the explanation of the LSER model using GIFs or atleast diagrams of each of the e, s, a, l constants
+          Show molecules which have high e, mid e, low e; high s, mid s, low s etc. That way, hopefully the student can
+          understand the LSER model concept of computational chemistry.
+
+(0000000) Implement the Injection flag which is static, and the ElutionTime flags which are dynamically changing. Use
+vertical line objects of unique colors and 1 stroke width that follow the ElutionTimes of the injected compounds.
+
+(000000) Provide a "COA Validation" excel spreadsheet for each column (like I've done with SPB Octyl)
+
+(00000) Learn about Mockito
+
 (00000) Implement a column-cutting minigame, column inlet-placement minigame
 
 (00000) Add an integration feature for peak area as well as peak width that can be marked on the linechart
@@ -6,7 +53,7 @@
 
 (000) Implement a Column switching feature (and column alert for buying a new one when you destroy it)
 
-(00) Implement a "Sensor" that allows you to watch up to 5 peaks elution time values.
+(00) Implement a "Sensor" that allows you to watch up to 5 peaks elution time values (SUBSUMED INTO ABOVE)
 
 (0) Use Oracle's guide for implementing javaFX app on the web
  - Deploying JavaFX application 7
@@ -16,38 +63,32 @@
 
 (0) Implement A filter function for the Inject Window that binds InjectionUIRecord visibility to filtered search terms
 
-(0) Implement simulation speed feature (allow to toggle between 1.0X - 5.0X)
-
-(10) Implement density data for each analyte -- OR NOT
-
 (4) Implement a label next to the userInputChemicals that shows the on-column weight of each userInputChemical
 
 (1) Implement the Injection Presets (use an accordion in the left pane of the Inject Button UI)
 
 (3) Add locking and lazy thread initilization to increase performance of Inject Button
 
-(5) Implement peak response feature. This should be done by turning the molar response factors into a relative scale
+X (5) Implement peak response feature. This should be done by turning the molar response factors into a relative scale
     of arbitrary peak areas that are fairly human reading. For example, consider a typical mass that could be injected
     on-column such as 133 ng of methyl octanoate. Methyl octanoate has a molar response factor of ~1. 133 ng of methyl
     octanoate is equal to 8.4e-10 moles of methyl octanoate. It is not very readable to say that the area of methyl
     octanoate is 8.4e-10 arbitrary units of area. It is better to multiply the number of moles by a constant to yield,
     lets say, 500 arbitary units of area. A proportionalityConstant = 5.952e11 * 8.4e-10 moles = 500 peak area units.
 
-(6) Implement the ExceedingMaxTemp feature
+
+X (6) Implement the ExceedingMaxTemp feature
     DONE: Max temp of column can be exceeded and will result in column breaking for all columns in temperature dependent
     rate and manner
     (6)(A) Implement a reduction of the LSER constants based on temp
     (6)(B) Implement a random peak generator for when the column is being destroyed
 
-(7) columnAdjustedOverloadMass should be implemented.
+X (7) columnAdjustedOverloadMass should be implemented.
     (7)(A) Use the overloadMass_1 as described in README.
 
-(8) A fast forward/FINISH RUN button must be implemented. If the usefulness of this program is that it allows
+X (8) A fast forward/FINISH RUN button must be implemented. If the usefulness of this program is that it allows
     the retentionTimes, relative peak areas, to be predicted roughly correctly... it would be nice to go faster and just
     get to the point.
-
-(9) Refactor Column code so that DB_1701 and HP_Innowax columns are based on the film thickness 1.0 um versions
-    DONE: implemented
 
 (10) Implement helper tips that show up on the screen when triggered:
     (10)(A) Example: if nearly ALL the peaks are exhibiting peak fronting, suggest using a column with a higher
@@ -59,8 +100,9 @@
             really strangely... why do you think this is happening?" then another helper tip 10 seconds later that says
             "Oven Temp has exceeded max column temp! It's been destroyed! Now you will have to beg Dr. Travis for
             hundreds of dollars to replace the column!"
+    (10)(C) Make these helper tips toggle on/off capable so user doesn't have to experience them.
 
-(11) Implement a "Learning Tip:" feature that is served to the user at application startup.
+(11) Implement "Learning Tip:" feature that is served to user at application startup. Toggle these on/off by preference.
     (11)(A) "Learning Tip: LET'S BREAK STUFF! The DB225 column has a max temp of 240 degrees. Install it, then set the
             oven to 350 and see what happens!"
     (11)(B) "Learning Tip: Ask ChatGPT "Could you describe the intermolecular forces that determine how strongly a
@@ -95,4 +137,4 @@
 
 (13) Add a Restart Simulation button
 
-(14) Implement InjectionMiniGame button
+X (14) Implement InjectionMiniGame button

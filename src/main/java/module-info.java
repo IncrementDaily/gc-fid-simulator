@@ -16,6 +16,6 @@ module com.karimbouchareb.chromatographysimulator {
 
     opens com.karimbouchareb.chromatographysimulator to javafx.fxml;
     exports com.karimbouchareb.chromatographysimulator;
-    exports combustionEnthalpyDataScript;
-    opens combustionEnthalpyDataScript to javafx.fxml;
+    exports Scripts;
+    opens Scripts to javafx.fxml;
 }
