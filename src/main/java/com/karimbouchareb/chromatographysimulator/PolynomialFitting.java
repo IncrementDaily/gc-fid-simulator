@@ -39,15 +39,15 @@ public class PolynomialFitting {
         }
     }
     public static void main(String[] args) {
-        String currentColumn = HP_5;
-        String currentConstant = "A";
+        String currentColumn = RXI_17;
+        String currentConstant = "C";
         final int E = 2;
         final int S = 3;
         final int A = 4;
         final int L = 5;
         final int C = 6;
 
-        int degree = 2;
+        int degree = 1;
 
         // Define the data points as coordinates
         ArrayList<Datapoint> data = new ArrayList<>();
@@ -59,10 +59,10 @@ public class PolynomialFitting {
 
             for (CSVRecord record : parser) {
 //                if (record.get(0).equals(currentColumn) && Double.parseDouble(record.get(1)) < 160) continue;
-                String check = "A";
+                String check = "C";
                 assert check.equals(currentConstant);
                 if (record.get(0).equals(currentColumn)){
-                    data.add(new Datapoint(Double.parseDouble(record.get(1)), Double.parseDouble(record.get(A)))); // Change record.get(currentConstant) appropriately
+                    data.add(new Datapoint(Double.parseDouble(record.get(1)), Double.parseDouble(record.get(C)))); // Change record.get(currentConstant) appropriately
                 }
             }
         } catch (IOException e) {

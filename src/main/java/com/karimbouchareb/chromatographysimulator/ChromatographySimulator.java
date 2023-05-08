@@ -64,7 +64,7 @@ public class ChromatographySimulator extends Application {
                     // TODO: 4/11/2023 then allow the user to "fast-forward" until the next peak will elute (do this by advancing the currentTime until
                     // TODO: 4/11/2023 currentTime = Math.max(nextRetentionTime - 5 seconds, currentTime());
     // DATA
-    private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/chemicalData.csv";
+    private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/ufz_LSERdataset.csv";
     private static final double MRF_PROPORTIONALITY_CONST = 5.952e11;
     // INTERNAL CLOCK OF SIMULATION
     private static Timer simulationTimer = new Timer();
@@ -112,7 +112,9 @@ public class ChromatographySimulator extends Application {
     @SuppressWarnings("ReassignedVariable")
     private static void initializePeaks(List<InjectionUIRecord> userInputs){
         try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
-             CSVParser parser = CSVFormat.DEFAULT.parse(fileReader)) {
+             CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
+                     "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
+                     "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
             String chemicalNameOfInput;
             String chemicalNameOfRecord;
             Chemical analyte;
@@ -132,7 +134,7 @@ public class ChromatographySimulator extends Application {
 
             for (CSVRecord record : parser){
                 if (record.getRecordNumber() == 1) continue;
-                chemicalNameOfRecord = record.get(1);
+                chemicalNameOfRecord = record.get("chemicalName");
                 for (InjectionUIRecord input : userInputs){
                     chemicalNameOfInput = input.chemicalName();
                     if (!chemicalNameOfRecord.equals(chemicalNameOfInput)) continue;
@@ -303,8 +305,6 @@ public class ChromatographySimulator extends Application {
     // This data was taken from Poole's paper referenced in the README.
     // Apply global compound loading capacity debuff/buff for columns that are bigger/smaller than 1 um thickness
     // REFERENCE: HP-1 Column (0.25 mm ID, 1 um film, 15 m length) had holdup time of ~40 seconds.
-    // TODO: 4/14/2023 Add a "thick film" buff to column overload mass for columns with thick film
-    // TODO: 4/17/2023 IMPLEMENT THE USE OF numTheoPlates() FOR APPLYING
     private static enum Column{
         SPB_OCTYL("SPB-Octyl",
                 260,
@@ -353,7 +353,7 @@ public class ChromatographySimulator extends Application {
                 new PolynomialFunction(new double[]{1.3410265734265738, -0.006103356643356645, 9.283216783216784E-6}),
                 new Logistic(2.8,61.5,-0.0161,3.9,0.17,.847),
                 new PolynomialFunction(new double[]{0.9151832167832167, -0.0037388927738927747, 4.350233100233109E-6}),
-                new PolynomialFunction(new double[]{0.4245804195804552, -0.08365139860139963, 7.899023892773994E-4, -3.1064976689977098E-6, 4.3888403263403846E-9})),
+                new PolynomialFunction(new double[]{-2.6})),
         RTX_440("RTX-440",
                 340,
                 30.0,
@@ -521,10 +521,9 @@ public class ChromatographySimulator extends Application {
         public Chemical(String chemicalName) {
             this.chemicalName = chemicalName;
 
-            String csvFile = "src/main/java/com/karimbouchareb/chromatographysimulator/chemicalData.csv";
-            try (FileReader fileReader = new FileReader(csvFile);
+            try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
                  CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
-                         "CAS","chemicalName","label","MRF","molecularWeight",
+                         "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
                          "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
                 for (CSVRecord record : parser) {
                     if (record.get(1).equals(chemicalName)){

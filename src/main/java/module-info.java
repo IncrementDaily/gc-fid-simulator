@@ -13,6 +13,7 @@ module com.karimbouchareb.chromatographysimulator {
     requires org.kordamp.ikonli.fontawesome;
     requires org.kordamp.ikonli.materialdesign;
     requires org.kordamp.ikonli.fluentui;
+    requires java.sql;
 
     opens com.karimbouchareb.chromatographysimulator to javafx.fxml;
     exports com.karimbouchareb.chromatographysimulator;

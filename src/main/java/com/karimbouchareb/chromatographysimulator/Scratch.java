@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.PriorityQueue;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Scratch {
 
@@ -71,10 +73,22 @@ public class Scratch {
         System.out.println(Arrays.toString(array));
     }
 
+    public static void test2(int[][] array){
+        int randomIndex = (int)(Math.random() * 100);
+        int randomValue = (int)(Math.random() * 10);
+        array[randomIndex][randomIndex] = randomValue;
+    }
+
     public static void main(String[] args) {
+        int[][] testy = new int[101][101];
 
+        for (int i = 0; i < 10000; i++) {
+            test2(testy);
+        }
 
-
+        for (int[] row : testy){
+            System.out.println(Arrays.toString(row));
+        }
 
 
     }
