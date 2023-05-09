@@ -13,6 +13,7 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.geometry.*;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -56,9 +57,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.DoubleStream;
 
-import static com.karimbouchareb.chromatographysimulator.ChromatographySimulator.MachineSettings.*;
-
-
 public class ChromatographySimulator extends Application {
 // TOP-LEVEL FIELDS // TODO: 4/11/2023 For "FAST-TRAVELING" through a simulation, if the retention times of a given peak are a long time off
                     // TODO: 4/11/2023 then allow the user to "fast-forward" until the next peak will elute (do this by advancing the currentTime until
@@ -66,17 +64,13 @@ public class ChromatographySimulator extends Application {
     // DATA
     private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/ufz_LSERdataset.csv";
     private static final double MRF_PROPORTIONALITY_CONST = 5.952e11;
+
     // INTERNAL CLOCK OF SIMULATION
     private static Timer simulationTimer = new Timer();
     private static AtomicInteger FRAME_LENGTH_MS = new AtomicInteger(50); // 50 milliseconds per frame
     private static final double FRAME_LENGTH_S = 0.05; // 0.05 seconds per frame
     private static double CURRENT_TIME = 0;  // elapsedTime in seconds
-    // PEAK & COLUMN FIELDS
-    private static TreeSet<Peak> ANALYTES_IN_COLUMN = new TreeSet<>();
-    private static Column CURRENT_COLUMN = Column.SPB_OCTYL;
-    private static HashMap<Column, Double[]> columnToDamAndRem = new HashMap<>();
-    private static double CURRENT_COLUMN_DAMAGE = 0.0;
-    private static double CURRENT_COLUMN_REMAINING = 1.0;
+
 
 // TOP-LEVEL STATIC METHODS
     // DATA
@@ -101,14 +95,7 @@ public class ChromatographySimulator extends Application {
     private static void incCurrentTime(){
         CURRENT_TIME += FRAME_LENGTH_S;
     }
-    // DETECTOR
-    private static double detect(){
-        double signalInPeakAreaUnits = 0.0;
-        for (Peak peak : ANALYTES_IN_COLUMN){
-            signalInPeakAreaUnits+= peak.plot();
-        }
-        return signalInPeakAreaUnits;
-    }
+
     @SuppressWarnings("ReassignedVariable")
     private static void initializePeaks(List<InjectionUIRecord> userInputs){
         try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
@@ -170,7 +157,7 @@ public class ChromatographySimulator extends Application {
                             .peakFrontingIndex(peakFrontingIndex)
                             .peakTailingIndex(peakTailingIndex)
                             .build();
-                    ANALYTES_IN_COLUMN.add(currentPeak);
+                    MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
 
                 }
             }
@@ -178,27 +165,7 @@ public class ChromatographySimulator extends Application {
             throw new RuntimeException(e);
         }
     }
-    // COLUMN / OVEN METHODS
-    private static boolean columnMaxTempExceeded(){
-        return MachineSettings.OVEN_TEMPERATURE > CURRENT_COLUMN.maxTemp;
-    }
-    private static void damageColumn(){
-        if (CURRENT_COLUMN_REMAINING == 0.0) return;
-        if (CURRENT_COLUMN_DAMAGE == 0.0) {
-            CURRENT_COLUMN_DAMAGE = 0.001;
-            CURRENT_COLUMN_REMAINING = 0.999;
-        }
-        double overMaxQuotient = (MachineSettings.OVEN_TEMPERATURE - CURRENT_COLUMN.maxTemp) / CURRENT_COLUMN.maxTemp;
-        // min = 0.0002941 (SPB_OCTYL maxTemp = 340, ovenTemp = 341); max = 0.4583 (DB_225 maxTemp = 240, ovenTemp = 350)
-        // if overMaxQuotient = 0.002941, then damageRate = 0.999849151 and bleedRate = 1.00026111
-        // if overMaxQuotient = 0.4583, then damageRate = 0.997617625 and bleedRate = 1.00412375
-        // damageRateRange = 0.002231526
-        // bleedRateRange = 0.00386264
-        double damageRate = 0.999849151 - ((overMaxQuotient-0.002941176)/0.455392157)*0.002231526;
-        double bleedRate = 1.00026111 + ((overMaxQuotient-0.002941176)/0.455392157)*0.00386264;
-        CURRENT_COLUMN_DAMAGE = Math.min(Math.pow(CURRENT_COLUMN_DAMAGE,damageRate), 1.0); // column reaches 100% damage after 120 seconds
-        CURRENT_COLUMN_REMAINING = Math.max(Math.pow(CURRENT_COLUMN_REMAINING,bleedRate), 0.0);
-    }
+
     // UI
     private static Region createVSpacer() {
         Region spacer = new Region();
@@ -225,7 +192,13 @@ public class ChromatographySimulator extends Application {
 
 // TOP-LEVEL STATIC MEMBER CLASSES
     // TODO: 4/17/2023 WILL HOLD CARRIER GAS VELOCITY CONSTANT AT 40 cm/s ... PERHAPS IN FUTURE THIS COULD BE ADJUSTABLE
-    static class MachineSettings{
+    protected static class MachineSettings{
+        // PEAK & COLUMN FIELDS
+        private static TreeSet<Peak> ANALYTES_IN_COLUMN = new TreeSet<>();
+        private static Column CURRENT_COLUMN = Column.SPB_OCTYL;
+        private static HashMap<Column, Double[]> columnToDamAndRem = new HashMap<>();
+        private static double CURRENT_COLUMN_DAMAGE = 0.0;
+        private static double CURRENT_COLUMN_REMAINING = 1.0;
         public static double INJECTION_VOLUME = 1.0; // microliters // TODO: 4/2/2023 Add Icon for "Machine Configurations" Button
         public static double SPLIT_RATIO = 100.0; // ratio 1:50 -- 1 part of sample sent to column, 50 parts of sample vented to waste.
         public static SimpleDoubleProperty splitRatioProperty = new SimpleDoubleProperty(SPLIT_RATIO);
@@ -300,11 +273,38 @@ public class ChromatographySimulator extends Application {
             return noiseStDevAtTemp;
         }
 
+        // COLUMN METHODS
+        private static boolean columnMaxTempExceeded(){
+            return MachineSettings.OVEN_TEMPERATURE > MachineSettings.CURRENT_COLUMN.maxTemp;
+        }
+        private static void damageColumn(){
+        if (MachineSettings.CURRENT_COLUMN_REMAINING == 0.0) return;
+        if (MachineSettings.CURRENT_COLUMN_DAMAGE == 0.0) {
+            MachineSettings.CURRENT_COLUMN_DAMAGE = 0.001;
+            MachineSettings.CURRENT_COLUMN_REMAINING = 0.999;
+        }
+        double overMaxQuotient = (MachineSettings.OVEN_TEMPERATURE - MachineSettings.CURRENT_COLUMN.maxTemp) / MachineSettings.CURRENT_COLUMN.maxTemp;
+        // min = 0.0002941 (SPB_OCTYL maxTemp = 340, ovenTemp = 341); max = 0.4583 (DB_225 maxTemp = 240, ovenTemp = 350)
+        // if overMaxQuotient = 0.002941, then damageRate = 0.999849151 and bleedRate = 1.00026111
+        // if overMaxQuotient = 0.4583, then damageRate = 0.997617625 and bleedRate = 1.00412375
+        // damageRateRange = 0.002231526
+        // bleedRateRange = 0.00386264
+        double damageRate = 0.999849151 - ((overMaxQuotient-0.002941176)/0.455392157)*0.002231526;
+        double bleedRate = 1.00026111 + ((overMaxQuotient-0.002941176)/0.455392157)*0.00386264;
+        MachineSettings.CURRENT_COLUMN_DAMAGE = Math.min(Math.pow(MachineSettings.CURRENT_COLUMN_DAMAGE,damageRate), 1.0); // column reaches 100% damage after 120 seconds
+        MachineSettings.CURRENT_COLUMN_REMAINING = Math.max(Math.pow(MachineSettings.CURRENT_COLUMN_REMAINING,bleedRate), 0.0);
     }
-    // All polynomial fits are based on data inside the columnLSERData.csv file.
-    // This data was taken from Poole's paper referenced in the README.
-    // Apply global compound loading capacity debuff/buff for columns that are bigger/smaller than 1 um thickness
-    // REFERENCE: HP-1 Column (0.25 mm ID, 1 um film, 15 m length) had holdup time of ~40 seconds.
+
+        // DETECTOR
+        private static double detect(){
+            double signalInPeakAreaUnits = 0.0;
+            for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN){
+                signalInPeakAreaUnits+= peak.plot();
+            }
+            return signalInPeakAreaUnits;
+        }
+
+    }
     private static enum Column{
         SPB_OCTYL("SPB-Octyl",
                 260,
@@ -467,19 +467,19 @@ public class ChromatographySimulator extends Application {
         // If column has been damaged, column LSER constant values are lowered proportionally (column less able to
         // perform separatory function).
         public double E(double ovenTemperature){
-            return eCurve.value(ovenTemperature)*CURRENT_COLUMN_REMAINING;
+            return eCurve.value(ovenTemperature)* MachineSettings.CURRENT_COLUMN_REMAINING;
         }
         public double S(double ovenTemperature){
-            return sCurve.value(ovenTemperature)*CURRENT_COLUMN_REMAINING;
+            return sCurve.value(ovenTemperature)* MachineSettings.CURRENT_COLUMN_REMAINING;
         }
         public double A(double ovenTemperature){
-            return aCurve.value(ovenTemperature)*CURRENT_COLUMN_REMAINING;
+            return aCurve.value(ovenTemperature)* MachineSettings.CURRENT_COLUMN_REMAINING;
         }
         public double L(double ovenTemperature){
-            return lCurve.value(ovenTemperature)*CURRENT_COLUMN_REMAINING;
+            return lCurve.value(ovenTemperature)* MachineSettings.CURRENT_COLUMN_REMAINING;
         }
         public double C(double ovenTemperature){
-            return cCurve.value(ovenTemperature)*CURRENT_COLUMN_REMAINING;
+            return cCurve.value(ovenTemperature)* MachineSettings.CURRENT_COLUMN_REMAINING;
         }
         public double lengthMeters(){
             return columnLength;
@@ -544,25 +544,25 @@ public class ChromatographySimulator extends Application {
         }
 
         private double calcRetentionFactor(){
-            double logk = e*CURRENT_COLUMN.E(MachineSettings.OVEN_TEMPERATURE)
-                    + s*CURRENT_COLUMN.S(MachineSettings.OVEN_TEMPERATURE)
-                    + a*CURRENT_COLUMN.A(MachineSettings.OVEN_TEMPERATURE)
-                    + l*CURRENT_COLUMN.L(MachineSettings.OVEN_TEMPERATURE)
-                    + CURRENT_COLUMN.C(MachineSettings.OVEN_TEMPERATURE);
+            double logk = e* MachineSettings.CURRENT_COLUMN.E(MachineSettings.OVEN_TEMPERATURE)
+                    + s* MachineSettings.CURRENT_COLUMN.S(MachineSettings.OVEN_TEMPERATURE)
+                    + a* MachineSettings.CURRENT_COLUMN.A(MachineSettings.OVEN_TEMPERATURE)
+                    + l* MachineSettings.CURRENT_COLUMN.L(MachineSettings.OVEN_TEMPERATURE)
+                    + MachineSettings.CURRENT_COLUMN.C(MachineSettings.OVEN_TEMPERATURE);
             double k = Math.pow(10.0,logk);
             return k;
         }
         private double calcRetentionTime(){
-            double currentHoldUpTime = CURRENT_COLUMN.holdUpTime(MachineSettings.getOvenTemperature());
+            double currentHoldUpTime = MachineSettings.CURRENT_COLUMN.holdUpTime(MachineSettings.getOvenTemperature());
             double retentionFactor = calcRetentionFactor();
             double retentionTime = currentHoldUpTime + (currentHoldUpTime*retentionFactor);
             return retentionTime;
         }
         // See README regarding calculating overloadMass
         private double adjustedOverloadMass(){
-            if (CURRENT_COLUMN.filmThickness == 1.0) return overloadMass_1;
-            else if (CURRENT_COLUMN.filmThickness >= 0.5) return overloadMass_1/2;
-            else if (CURRENT_COLUMN.filmThickness >= 0.25) return overloadMass_1/4;
+            if (MachineSettings.CURRENT_COLUMN.filmThickness == 1.0) return overloadMass_1;
+            else if (MachineSettings.CURRENT_COLUMN.filmThickness >= 0.5) return overloadMass_1/2;
+            else if (MachineSettings.CURRENT_COLUMN.filmThickness >= 0.25) return overloadMass_1/4;
             else return overloadMass_1/8;
         }
 
@@ -721,32 +721,6 @@ public class ChromatographySimulator extends Application {
             return Double.compare(getElutionTime(), otherPeak.getElutionTime());
         }
     }
-    private static class InjectionUIRecord{
-        private final TextField textfield;
-        private final String chemicalName;
-        private SimpleStringProperty concentration = new SimpleStringProperty();
-
-        public InjectionUIRecord(TextField textfield, String chemicalName) {
-            this.textfield = textfield;
-            this.chemicalName = chemicalName;
-        }
-
-        public TextField textField() {
-            return textfield;
-        }
-        public String chemicalName() {
-            return chemicalName;
-        }
-        public SimpleStringProperty concentrationProperty(){
-            return concentration;
-        }
-        public double concentration(){
-            return Double.parseDouble(concentration.getValue());
-        }
-        public String toString(){
-            return chemicalName;
-        }
-    }
     private static class GaussianCurve implements Function<Double, Double> {
         static final double IDEAL_PEAK_SIGMA = 0.1;
         private double amplitude;
@@ -795,6 +769,32 @@ public class ChromatographySimulator extends Application {
                         * (ascending.sigma + descending.sigma));
             }
         }
+    private static class InjectionUIRecord{
+        private final TextField textfield;
+        private final String chemicalName;
+        private SimpleStringProperty concentration = new SimpleStringProperty();
+
+        public InjectionUIRecord(TextField textfield, String chemicalName) {
+            this.textfield = textfield;
+            this.chemicalName = chemicalName;
+        }
+
+        public TextField textField() {
+            return textfield;
+        }
+        public String chemicalName() {
+            return chemicalName;
+        }
+        public SimpleStringProperty concentrationProperty(){
+            return concentration;
+        }
+        public double concentration(){
+            return Double.parseDouble(concentration.getValue());
+        }
+        public String toString(){
+            return chemicalName;
+        }
+    }
 
     @Override
     public void start(Stage stage) {
@@ -889,7 +889,7 @@ public class ChromatographySimulator extends Application {
         Button elutionTimesButton = new Button("get ElutionTimes");
             // Action
             elutionTimesButton.setOnAction(e -> {
-            for(Peak peak : ANALYTES_IN_COLUMN){
+            for(Peak peak : MachineSettings.ANALYTES_IN_COLUMN){
                 System.out.print(peak.analyte.toString() + " ");
                 System.out.print(String.format("%.1f", peak.getElutionTime()) + " eTime");
                 System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
@@ -905,14 +905,14 @@ public class ChromatographySimulator extends Application {
         Button columnDamage = new Button("column damage");
             // Action
             columnDamage.setOnAction(e -> {
-            System.out.println("Current Damage = " + CURRENT_COLUMN_DAMAGE);
+            System.out.println("Current Damage = " + MachineSettings.CURRENT_COLUMN_DAMAGE);
         });
 
         // ColumnDamage Button
         Button columnRem = new Button("column Rem");
             // Action
             columnRem.setOnAction(e -> {
-            System.out.println("Column Rem = " + CURRENT_COLUMN_REMAINING);
+            System.out.println("Column Rem = " + MachineSettings.CURRENT_COLUMN_REMAINING);
         });
 
 
@@ -935,12 +935,12 @@ public class ChromatographySimulator extends Application {
         thermometer4.setIconSize(30);
         Button setOvenTempButton = new Button("");
         setOvenTempButton.setGraphic(thermometer0);
-        ovenTempProperty.addListener(e -> {
-            if (ovenTempProperty.doubleValue() >= 330.0) {setOvenTempButton.setGraphic(thermometer4); return;}
-            if (ovenTempProperty.doubleValue() >= 280.0) {setOvenTempButton.setGraphic(thermometer3); return;}
-            if (ovenTempProperty.doubleValue() >= 180.0) {setOvenTempButton.setGraphic(thermometer2); return;}
-            if (ovenTempProperty.doubleValue() >= 90.0) {setOvenTempButton.setGraphic(thermometer1); return;}
-            if (ovenTempProperty.doubleValue() < 90.0) {setOvenTempButton.setGraphic(thermometer0); return;}
+        MachineSettings.ovenTempProperty.addListener(e -> {
+            if (MachineSettings.ovenTempProperty.doubleValue() >= 330.0) {setOvenTempButton.setGraphic(thermometer4); return;}
+            if (MachineSettings.ovenTempProperty.doubleValue() >= 280.0) {setOvenTempButton.setGraphic(thermometer3); return;}
+            if (MachineSettings.ovenTempProperty.doubleValue() >= 180.0) {setOvenTempButton.setGraphic(thermometer2); return;}
+            if (MachineSettings.ovenTempProperty.doubleValue() >= 90.0) {setOvenTempButton.setGraphic(thermometer1); return;}
+            if (MachineSettings.ovenTempProperty.doubleValue() < 90.0) {setOvenTempButton.setGraphic(thermometer0); return;}
         });
         setOvenTempButton.setPrefWidth(140);
         setOvenTempButton.setPrefHeight(45);
@@ -962,7 +962,7 @@ public class ChromatographySimulator extends Application {
                 currentTempMarker.setFont(Font.font(null, FontWeight.BOLD, 10));
                 Label currentTempVal = new Label();
                 currentTempVal.setFont(Font.font(null, FontWeight.BOLD, 10));
-                currentTempVal.textProperty().bind(ovenTempProperty.asString("%.0f"));
+                currentTempVal.textProperty().bind(MachineSettings.ovenTempProperty.asString("%.0f"));
                 HBox currentTemp = new HBox(currentTempMarker,currentTempVal);
 
                 Label info = new Label("Tip: The oven temperature(s) you select for your method are of primary importance for ensuring good separation of peaks. Low temperatures cause chemicals to spend more time in the column. High temperatures speed them through. The selectivity parameters of your columns change with temperature as well. Play around!");
@@ -1011,7 +1011,7 @@ public class ChromatographySimulator extends Application {
             // "Sensor" Reading
             ProgressBar progressBar = new ProgressBar();
             progressBar.setPrefWidth(140);
-            progressBar.progressProperty().bind(ovenTempProperty.divide((350)));
+            progressBar.progressProperty().bind(MachineSettings.ovenTempProperty.divide((350)));
             progressBar.setStyle("-fx-accent: crimson");
         // Wrapper
         VBox setOvenTempVBox = new VBox(setOvenTempButton,progressBar);
@@ -1025,7 +1025,7 @@ public class ChromatographySimulator extends Application {
         splitRatioButton.setGraphic(splitRatio);
         splitRatioButton.setFont(Font.font(null, FontWeight.EXTRA_BOLD, 20));
         SimpleStringProperty colon = new SimpleStringProperty(": ");
-        splitRatioButton.textProperty().bind(colon.concat(splitRatioProperty.asString("%.0f")));
+        splitRatioButton.textProperty().bind(colon.concat(MachineSettings.splitRatioProperty.asString("%.0f")));
         splitRatioButton.setPrefWidth(140);
         splitRatioButton.setPrefHeight(45);
             // Action
@@ -1069,9 +1069,9 @@ public class ChromatographySimulator extends Application {
 
                 // Show the input dialog and get the entered value
                 inputDialog.showAndWait().ifPresent(value -> {
-                    SPLIT_RATIO = Integer.parseInt(value);
+                    MachineSettings.SPLIT_RATIO = Integer.parseInt(value);
                     Platform.runLater(() ->{
-                        splitRatioProperty.set(SPLIT_RATIO);
+                        MachineSettings.splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
                     });
                 });
             });
@@ -1351,8 +1351,8 @@ public class ChromatographySimulator extends Application {
         fidDetector.setAlignment(Pos.CENTER);
         detectorOnOffButton.setGraphic(fidDetector);
         detectorOnOffButton.setOnAction(e -> {
-            isDetectorOn.set(isDetectorOn.not().get());
-            if (isDetectorOn.get()) {
+            MachineSettings.isDetectorOn.set(MachineSettings.isDetectorOn.not().get());
+            if (MachineSettings.isDetectorOn.get()) {
                 fire.setIconColor(Color.DODGERBLUE);
             }else{
                 fire.setIconColor(Color.BLACK);
@@ -1364,7 +1364,7 @@ public class ChromatographySimulator extends Application {
         FontIcon column = FontIcon.of(MaterialDesign.MDI_BLUR_LINEAR); // MDI CLOCK START
         column.setIconColor(Color.DODGERBLUE);
         column.setIconSize(34);
-        Label columnName = new Label(CURRENT_COLUMN.toString());
+        Label columnName = new Label(MachineSettings.CURRENT_COLUMN.toString());
         columnName.setFont(Font.font(null,FontWeight.BOLD,10));
         columnName.setTextFill(Color.DODGERBLUE);
         VBox switchColumnButtonGraphic = new VBox(column,columnName/*,forward*/);
@@ -1403,8 +1403,8 @@ public class ChromatographySimulator extends Application {
                 Button installColumnButton = (Button) columnChoices.getDialogPane().lookupButton(ButtonType.OK);
                 installColumnButton.setText("Install Column");
                 installColumnButton.disableProperty()
-                        .bind(ovenTempProperty.greaterThan(40.0)
-                        .or(isDetectorOn)
+                        .bind(MachineSettings.ovenTempProperty.greaterThan(40.0)
+                        .or(MachineSettings.isDetectorOn)
                         .or(noneSelected));
 
                 columnChoices.getDialogPane().setPrefWidth(750);
@@ -1914,11 +1914,11 @@ public class ChromatographySimulator extends Application {
                     Label warningMessage1 = new Label("Error: FID Detector is Active");
                     warningMessage1.setTextFill(Color.RED);
                     warningMessage1.setFont(Font.font(null,FontWeight.BOLD,10));
-                    warningMessage1.visibleProperty().bind(isDetectorOn);
+                    warningMessage1.visibleProperty().bind(MachineSettings.isDetectorOn);
                     Label warningMessage2 = new Label("Error: Oven Temperature >= 40 degrees C");
                     warningMessage2.setTextFill(Color.RED);
                     warningMessage2.setFont(Font.font(null,FontWeight.BOLD,10));
-                    warningMessage2.visibleProperty().bind(ovenTempProperty.greaterThan(40.0));
+                    warningMessage2.visibleProperty().bind(MachineSettings.ovenTempProperty.greaterThan(40.0));
                     Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it.");
                     columnWarning.setFont(Font.font(null, FontPosture.ITALIC,10));
                     columnWarning.setTextFill(Color.DODGERBLUE);
@@ -1930,8 +1930,8 @@ public class ChromatographySimulator extends Application {
 
                 Optional<Column> result = columnChoices.showAndWait();
                 if (result.isPresent()) {
-                    CURRENT_COLUMN = result.get();
-                    columnName.setText(CURRENT_COLUMN.toString());
+                    MachineSettings.CURRENT_COLUMN = result.get();
+                    columnName.setText(MachineSettings.CURRENT_COLUMN.toString());
                 }
             /*}*/
         });
@@ -1976,13 +1976,13 @@ public class ChromatographySimulator extends Application {
 
                                 // Column reaches 100% damage after many thousands of calls to damageColumn()
                                 // The amount of time this takes depends on how badly the column's max temp is exceeded
-                                if (columnMaxTempExceeded()) damageColumn();
+                                if (MachineSettings.columnMaxTempExceeded()) MachineSettings.damageColumn();
 
                                 // Update split ratio
-                                splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
+                                MachineSettings.splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
 
                                 // Update ovenTempProperty & check if temp is ramping or cooling, then nudge temp
-                                ovenTempProperty.set(MachineSettings.OVEN_TEMPERATURE);
+                                MachineSettings.ovenTempProperty.set(MachineSettings.OVEN_TEMPERATURE);
                                 if (MachineSettings.TEMP_RAMPING.get()){
                                     MachineSettings.nudgeOvenTempUp();
                                     if (MachineSettings.getOvenTemperature()
@@ -2002,9 +2002,9 @@ public class ChromatographySimulator extends Application {
                                 // column is damaged at all, or run() has been called 10 times with no updating
                                 if (MachineSettings.TEMP_RAMPING.get()
                                         || MachineSettings.TEMP_COOLING.get()
-                                        || CURRENT_COLUMN_DAMAGE > 0.0
+                                        || MachineSettings.CURRENT_COLUMN_DAMAGE > 0.0
                                         || runCounter%10 == 0) {
-                                    for (Peak peak : ANALYTES_IN_COLUMN) {
+                                    for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                                         // Check if the peak is eluting; if it is, don't update it.
                                         if (currentTime() >= (peak.getElutionTime()
                                                 - peak.ascendingCurve.calcWidthOfHalfCurve())) {
@@ -2018,12 +2018,12 @@ public class ChromatographySimulator extends Application {
                                 }
                                 runCounter++;
                                 // After updating, make all peaks traverse the column
-                                for (Peak peak : ANALYTES_IN_COLUMN) {
+                                for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                                         peak.traverseColumn();
                                 }
 
                                 // Iterate through all the peaks and remove them if they have already eluted
-                                Iterator<Peak> peakIterator = ANALYTES_IN_COLUMN.iterator();
+                                Iterator<Peak> peakIterator = MachineSettings.ANALYTES_IN_COLUMN.iterator();
                                 while (peakIterator.hasNext()) {
                                     Peak peak = peakIterator.next();
                                     // Make sure the currentTime is well past the peaks non-negligible portion
@@ -2037,8 +2037,8 @@ public class ChromatographySimulator extends Application {
                                         MachineSettings.ovenTempToMeanNoise(MachineSettings.OVEN_TEMPERATURE),
                                         MachineSettings.ovenTempToStDevNoise(MachineSettings.OVEN_TEMPERATURE)
                                 );
-                                if (isDetectorOn.get()){
-                                    detectorSignal = detect() + noise;
+                                if (MachineSettings.isDetectorOn.get()){
+                                    detectorSignal = MachineSettings.detect() + noise;
                                 }else detectorSignal = 0;
 
                                 // Add datapoint every 50 ms (x = currentTime, y = detectorSignal)
@@ -2269,8 +2269,10 @@ public class ChromatographySimulator extends Application {
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
         leftControls.getChildren().add(elutionTimesButton);
         leftControls.setAlignment(Pos.CENTER);
-        ImageView title = makeImageView("50-06-6noName.png");
-        leftControls.getChildren().add(title);
+//        ImageView title = makeImageView("title.png");
+//        root.setCenter(title);
+
+
 
 
         // Create main scene and show main stage
@@ -2306,10 +2308,10 @@ public class ChromatographySimulator extends Application {
 
                     // Column reaches 100% damage after many thousands of calls to damageColumn()
                     // The amount of time this takes depends on how badly the column's max temp is exceeded
-                    if (columnMaxTempExceeded()) damageColumn();
+                    if (MachineSettings.columnMaxTempExceeded()) MachineSettings.damageColumn();
 
                     // Update ovenTempProperty & check if temp is ramping or cooling, then nudge temp
-                    ovenTempProperty.set(MachineSettings.OVEN_TEMPERATURE);
+                    MachineSettings.ovenTempProperty.set(MachineSettings.OVEN_TEMPERATURE);
                     if (MachineSettings.TEMP_RAMPING.get()){
                         MachineSettings.nudgeOvenTempUp();
                         if (MachineSettings.getOvenTemperature()
@@ -2344,7 +2346,7 @@ public class ChromatographySimulator extends Application {
                         runCounter=0;
                     }*/
 
-                    for (Peak peak : ANALYTES_IN_COLUMN) {
+                    for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                         // Check if the peak is eluting; if it is, don't update it.
                         if (currentTime() >= (peak.getElutionTime()
                                 - peak.ascendingCurve.calcWidthOfHalfCurve())) {
@@ -2356,10 +2358,10 @@ public class ChromatographySimulator extends Application {
                     }
 
                     // Update split ratio
-                    splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
+                    MachineSettings.splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
 
                     // Iterate through all the peaks and remove them if they have already eluted
-                    Iterator<Peak> peakIterator = ANALYTES_IN_COLUMN.iterator();
+                    Iterator<Peak> peakIterator = MachineSettings.ANALYTES_IN_COLUMN.iterator();
                     while (peakIterator.hasNext()) {
                         Peak peak = peakIterator.next();
                         // Make sure the currentTime is well past the peaks non-negligible portion
@@ -2373,8 +2375,8 @@ public class ChromatographySimulator extends Application {
                             MachineSettings.ovenTempToMeanNoise(MachineSettings.OVEN_TEMPERATURE),
                             MachineSettings.ovenTempToStDevNoise(MachineSettings.OVEN_TEMPERATURE)
                     );
-                    if (isDetectorOn.get()){
-                        detectorSignal = detect() + noise;
+                    if (MachineSettings.isDetectorOn.get()){
+                        detectorSignal = MachineSettings.detect() + noise;
                     }else detectorSignal = 0;
 
                     // Add datapoint every 50 ms (x = currentTime, y = detectorSignal)

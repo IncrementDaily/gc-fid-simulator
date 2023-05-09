@@ -4,14 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="164e6a07-aea0-4ae0-a879-ab8dc965aba5" name="Changes" comment="initial checkin">
-      <change afterPath="$PROJECT_DIR$/docs/titleScreen/title.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docs/titleScreen/title.svg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/encodings.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ChromatographySimulator.iml" beforeDir="false" afterPath="$PROJECT_DIR$/ChromatographySimulator.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-    </list>
+    <list default="true" id="164e6a07-aea0-4ae0-a879-ab8dc965aba5" name="Changes" comment="initial checkin" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -229,7 +222,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="java-line">
           <url>file://$PROJECT_DIR$/src/main/java/com/karimbouchareb/chromatographysimulator/ChromatographySimulator.java</url>
-          <line>216</line>
+          <line>183</line>
           <option name="timeStamp" value="50" />
         </line-breakpoint>
       </breakpoints>
