@@ -2269,8 +2269,8 @@ public class ChromatographySimulator extends Application {
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
         leftControls.getChildren().add(elutionTimesButton);
         leftControls.setAlignment(Pos.CENTER);
-//        ImageView title = makeImageView("title.png");
-//        leftControls.getChildren().add(title);
+        ImageView title = makeImageView("50-06-6noName.png");
+        leftControls.getChildren().add(title);
 
 
         // Create main scene and show main stage
