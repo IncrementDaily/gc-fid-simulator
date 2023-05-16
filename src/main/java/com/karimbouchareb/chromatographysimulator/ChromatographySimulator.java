@@ -1,8 +1,6 @@
 package com.karimbouchareb.chromatographysimulator;
 
-import javafx.animation.Animation;
-import javafx.animation.Interpolator;
-import javafx.animation.TranslateTransition;
+import javafx.animation.*;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
@@ -14,13 +12,16 @@ import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
+import javafx.concurrent.Worker;
 import javafx.geometry.*;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
@@ -33,6 +34,7 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 import org.apache.commons.csv.CSVFormat;
@@ -47,7 +49,6 @@ import org.kordamp.ikonli.fontawesome.FontAwesome;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign.MaterialDesign;
 
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.URL;
@@ -63,7 +64,9 @@ public class ChromatographySimulator extends Application {
                     // TODO: 4/11/2023 currentTime = Math.max(nextRetentionTime - 5 seconds, currentTime());
     // DATA
     private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/ufz_LSERdataset.csv";
+    private static int CHEM_DATA_SIZE = 0;
     private static final double MRF_PROPORTIONALITY_CONST = 5.952e11;
+    private static ObservableList<Chemical> allChemsObsvbl;
 
     // INTERNAL CLOCK OF SIMULATION
     private static Timer simulationTimer = new Timer();
@@ -71,6 +74,18 @@ public class ChromatographySimulator extends Application {
     private static final double FRAME_LENGTH_S = 0.05; // 0.05 seconds per frame
     private static double CURRENT_TIME = 0;  // elapsedTime in seconds
 
+    // SPLASH SCREEN
+    private StackPane splashScreenPane = new StackPane();
+    private ProgressBar loadProgress;
+    private Label progressText;
+    private Stage mainStage;
+    private Button launchButton;
+    private static final Screen SCREEN = Screen.getPrimary();
+    private static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
+
+    // MAIN SCENE
+    private static Scene mainScene;
+    private BorderPane root;
 
 // TOP-LEVEL STATIC METHODS
     // DATA
@@ -526,6 +541,7 @@ public class ChromatographySimulator extends Application {
                          "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
                          "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
                 for (CSVRecord record : parser) {
+                    if (record.getRecordNumber() == 1) continue;
                     if (record.get(1).equals(chemicalName)){
                         this.chemicalName = record.get(1);
                         this.molarResponseFactor = Double.parseDouble(record.get("MRF"));
@@ -796,12 +812,172 @@ public class ChromatographySimulator extends Application {
         }
     }
 
+    // UI-MANAGEMENT METHODS & INTERFACES
     @Override
-    public void start(Stage stage) {
-        // Get the primary screen
-        Screen screen = Screen.getPrimary();
-        // Get the bounds of the screen
-        Rectangle2D screenBounds = screen.getVisualBounds();
+    public void init() {
+        try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
+             CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
+                     "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
+                     "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
+            CHEM_DATA_SIZE = (int) parser.getRecords().stream().count();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // SPLASH SCREEN OBJECTS FOR LOADING
+        splashScreenPane.setBackground(Background.fill(Color.BLACK));
+        // title
+        Pane titlePane = new Pane();
+        ImageView title = makeImageView("title.png");
+        title.setPreserveRatio(true);
+        title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58); // TODO: 5/11/2023 Watch this
+        title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
+        title.setY(SCREEN_BOUNDS.getMinY() + SCREEN_BOUNDS.getHeight() / 2 - title.prefHeight(title.getFitWidth()) / 2);
+        titlePane.getChildren().add(title);
+        // background
+        ImageView backgroundScatter = makeImageView("backgroundPopulator.gif");
+        RotateTransition rtBackground = new RotateTransition(Duration.millis(220000), backgroundScatter);
+        rtBackground.setByAngle(360);
+        rtBackground.setAutoReverse(true);
+        rtBackground.setCycleCount(RotateTransition.INDEFINITE);
+        rtBackground.play();
+        backgroundScatter.setFitWidth(SCREEN_BOUNDS.getWidth()*4);
+        backgroundScatter.setFitHeight(SCREEN_BOUNDS.getHeight()*3);
+        // wave
+        Pane wavePane = new Pane();
+        ImageView wave = makeImageView("wave.gif");
+        wave.setRotate(1.8);
+        wave.setFitWidth(title.getFitWidth()*1.15);
+        wave.setFitHeight(title.prefHeight(title.getFitWidth())*0.65);
+        wave.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - wave.getFitWidth() / 2);
+        wave.setY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2) - wave.getFitHeight() / 2);
+        wavePane.getChildren().add(wave);
+        // Travis
+        Pane travisHeadPane = new Pane();
+        ImageView travisHead = makeImageView("travisHead.png");
+        travisHead.setPreserveRatio(true);
+        travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
+        RotateTransition rtTravisHead = new RotateTransition(Duration.millis(10000), travisHead);
+        rtTravisHead.setByAngle(360);
+        rtTravisHead.setCycleCount(RotateTransition.INDEFINITE);
+        rtTravisHead.play();
+        TranslateTransition ttTravisHead = new TranslateTransition(Duration.millis(3000),travisHead);
+        ttTravisHead.setFromX(SCREEN_BOUNDS.getWidth()-Math.random()*SCREEN_BOUNDS.getWidth());
+        ttTravisHead.setFromY(SCREEN_BOUNDS.getHeight()-Math.random()*SCREEN_BOUNDS.getHeight());
+        ttTravisHead.setToX(SCREEN_BOUNDS.getWidth() - Math.random()*SCREEN_BOUNDS.getWidth());
+        ttTravisHead.setToY(SCREEN_BOUNDS.getHeight() - Math.random()*SCREEN_BOUNDS.getHeight());
+        ttTravisHead.play();
+        ttTravisHead.setOnFinished(e->{
+            ttTravisHead.setFromX(travisHead.getTranslateX());
+            ttTravisHead.setFromY(travisHead.getTranslateY());
+            ttTravisHead.setToX(SCREEN_BOUNDS.getWidth() - Math.random()*SCREEN_BOUNDS.getWidth());
+            ttTravisHead.setToY(SCREEN_BOUNDS.getHeight() - Math.random()*SCREEN_BOUNDS.getHeight());
+            ttTravisHead.play();
+        });
+        travisHeadPane.getChildren().add(travisHead);
+        // launchPane
+        Pane launchPane = new Pane();
+        VBox launch = new VBox();
+        launch.setAlignment(Pos.CENTER);
+        loadProgress = new ProgressBar();
+        loadProgress.setStyle("-fx-accent: #ff6900");
+        loadProgress.setPrefWidth(SCREEN_BOUNDS.getWidth()*.30);
+        progressText = new Label("Synthesizing Chemicals . . .");
+        progressText.setAlignment(Pos.CENTER);
+        progressText.setFont(Font.font(null,FontWeight.EXTRA_BOLD,10));
+        progressText.setTextFill(Color.WHITE);
+        launchButton = new Button("Launch");
+        launchButton.setDisable(true); // Initially the button should be hidden
+            launchButton.setOnAction(e -> {
+                FadeTransition fadeSplash = new FadeTransition(Duration.seconds(1.2), splashScreenPane);
+                fadeSplash.setFromValue(1.0);
+                fadeSplash.setToValue(0.0);
+                fadeSplash.setOnFinished(actionEvent -> {
+                  launchButton.sceneProperty().get().getWindow().hide();
+                });
+                fadeSplash.play();
+                showMainStage(root);
+            });
+        launch.setLayoutX(SCREEN_BOUNDS.getMinX() + (SCREEN_BOUNDS.getWidth()/2) - loadProgress.getPrefWidth()/2);
+        launch.setLayoutY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2)*1.5 - launch.getHeight() / 2);
+        launch.getChildren().addAll(loadProgress, progressText, launchButton);
+        launchPane.getChildren().add(launch);
+
+        splashScreenPane.getChildren().addAll(backgroundScatter,travisHeadPane, wavePane, titlePane, launchPane);
+    }
+    private void showMainStage(Parent root) {
+        mainStage = new Stage(StageStyle.DECORATED);
+        mainStage.setTitle("Gas Chromatography Simulator");
+        /*mainStage.getIcons().add(new Image(
+                APPLICATION_ICON
+        ));*/
+
+        /*final ListView<Integer> peopleView = new ListView<>();
+        peopleView.itemsProperty().bind(friends);*/
+
+        mainScene = new Scene(root, SCREEN_BOUNDS.getWidth()*0.98, SCREEN_BOUNDS.getHeight()*0.98);
+        mainStage.setScene(mainScene);
+        mainStage.setMaximized(true);
+        mainStage.show();
+    }
+    private void showSplash(Stage initStage, Task<?> task, InitCompletionHandler initCompletionHandler
+    ) {
+        progressText.textProperty().bind(task.messageProperty());
+        loadProgress.progressProperty().bind(task.progressProperty());
+        task.stateProperty().addListener((observableValue, oldState, newState) -> {
+            if (newState == Worker.State.SUCCEEDED) {
+                loadProgress.progressProperty().unbind();
+                loadProgress.setProgress(1);
+                initStage.toFront();
+
+
+                initCompletionHandler.complete();
+            } // todo add code to gracefully handle other task states.
+        });
+
+        Scene splashScene = new Scene(splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
+        initStage.setMaximized(true);
+        initStage.setScene(splashScene);
+        initStage.initStyle(StageStyle.DECORATED);
+        initStage.setAlwaysOnTop(true);
+        initStage.show();
+    }
+    public interface InitCompletionHandler {
+        void complete();
+    }
+    @Override
+    public void start(Stage initStage) {
+        final Task<ObservableList<Chemical>> loadingTask = new Task<ObservableList<Chemical>>() {
+            @Override
+            protected ObservableList<Chemical> call() {
+                updateMessage("Synthesizing Chemicals . . .");
+
+                allChemsObsvbl = FXCollections.<Chemical>observableArrayList();
+                try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
+                     CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
+                             "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
+                             "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
+                    int iterations = 0;
+                    for (CSVRecord record : parser) {
+                        if (record.getRecordNumber() == 1) continue;
+                        String chemicalName = record.get("chemicalName");
+                        Chemical currentChemical = new Chemical(chemicalName);
+                        allChemsObsvbl.add(currentChemical);
+                        updateProgress(iterations + 1, CHEM_DATA_SIZE);
+                        updateMessage("Synthesizing Chemical . . . " + chemicalName);
+//                        Thread.sleep(0);
+                        iterations++;
+                    }
+                    updateMessage("All Chemicals Synthesized");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                return allChemsObsvbl;
+            }
+        };
+
+
 
         // Create a NumberAxis for the x-axis (autoranging)
         final NumberAxis xAxis = new NumberAxis(0.0,60.0,1.0);
@@ -840,7 +1016,7 @@ public class ChromatographySimulator extends Application {
 
 
         // Define Root Layout Container, populate lineChart at center, left & right controls
-        BorderPane root = new BorderPane();
+        root = new BorderPane();
           BackgroundFill backgroundFill = new BackgroundFill(
             Color.FLORALWHITE,
             CornerRadii.EMPTY,
@@ -1084,8 +1260,8 @@ public class ChromatographySimulator extends Application {
         injectButton.setPrefWidth(140);
         injectButton.setPrefHeight(45);
         injectButton.setOnAction(e1 -> {
-            Stage injectStage = new Stage();
-            injectStage.initOwner(stage);
+            Stage injectStage = new Stage(StageStyle.DECORATED); // TODO: 5/11/2023 THIS WHY LOOKS WEIRD
+            injectStage.initOwner(mainStage);
             injectStage.initModality(Modality.APPLICATION_MODAL);
             injectStage.setTitle("Injection");
 
@@ -1335,7 +1511,7 @@ public class ChromatographySimulator extends Application {
             splitPane.getItems().addAll(chemListScrollPane,finalizingButtons);
 
             // Create the Scene and add the ScrollPane to it
-            Scene scene = new Scene(splitPane, stage.getWidth()-100, stage.getHeight()-200);
+            Scene scene = new Scene(splitPane, mainStage.getWidth()-100, mainStage.getHeight()-200);
             injectStage.setScene(scene);
             injectStage.show();
         });
@@ -1357,6 +1533,8 @@ public class ChromatographySimulator extends Application {
             }else{
                 fire.setIconColor(Color.BLACK);
             }
+
+            System.out.println("allChemsObsvbl = " + allChemsObsvbl);
         });
 
         // SWITCH COLUMN BUTTON
@@ -2238,7 +2416,17 @@ public class ChromatographySimulator extends Application {
             yAxis.setTickUnit((int)(currentHighY/10.0));
         });
 
+        // UTILITY BUTTON
+        Button utilityButton = new Button("utility");
+        utilityButton.setOnAction(e->{
+            Runtime runtime = Runtime.getRuntime();
+            long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+            long maxMemory = runtime.maxMemory();
+            System.out.println("Used heap memory: " + usedMemory + " bytes");
+            System.out.println("Max heap memory: " + maxMemory + " bytes");
 
+
+        });
 
         // UI-VIEW-PANEL PARENT NODE
         VBox uiViewPanel= new VBox();
@@ -2268,17 +2456,22 @@ public class ChromatographySimulator extends Application {
         leftControls.getChildren().add(createVSpacer());
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
         leftControls.getChildren().add(elutionTimesButton);
+        leftControls.getChildren().add(utilityButton);
         leftControls.setAlignment(Pos.CENTER);
-//        ImageView title = makeImageView("title.png");
-//        root.setCenter(title);
-
-
-
 
         // Create main scene and show main stage
-        Scene scene = new Scene(root, screenBounds.getWidth()-100, screenBounds.getHeight()-100 );
-        stage.setScene(scene);
-        stage.show();
+        /*Scene mainScene = new Scene(root, SCREEN_BOUNDS.getWidth()*0.98, SCREEN_BOUNDS.getHeight()*0.98);
+        mainScene.setMaximized(true);
+        mainStage.setScene(mainScene);
+        mainStage.show();*/
+
+        showSplash(
+                initStage,
+                loadingTask,
+                () -> launchButton.setDisable(false)
+        );
+        new Thread(loadingTask).start();
+
 
         // Run Simulator
         simulationTimer.schedule(
@@ -2301,6 +2494,8 @@ public class ChromatographySimulator extends Application {
                     // Don't generate new data points when paused
                     return;
                 }
+
+
 
                 Platform.runLater(() -> {
                     // Increment Internal Clock
