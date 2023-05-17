@@ -5,12 +5,10 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
-import javafx.beans.binding.DoubleBinding;
 import javafx.beans.property.*;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
 import javafx.geometry.*;
@@ -21,7 +19,7 @@ import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
-import javafx.scene.effect.DropShadow;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
@@ -66,7 +64,6 @@ public class ChromatographySimulator extends Application {
     private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/ufz_LSERdataset.csv";
     private static int CHEM_DATA_SIZE = 0;
     private static final double MRF_PROPORTIONALITY_CONST = 5.952e11;
-    private static ObservableList<Chemical> allChemsObsvbl;
 
     // INTERNAL CLOCK OF SIMULATION
     private static Timer simulationTimer = new Timer();
@@ -86,6 +83,9 @@ public class ChromatographySimulator extends Application {
     // MAIN SCENE
     private static Scene mainScene;
     private BorderPane root;
+
+    // INJECT SCENE
+    private static ObservableList<ChemicalView> obsListChemicalViews = FXCollections.observableArrayList();
 
 // TOP-LEVEL STATIC METHODS
     // DATA
@@ -117,24 +117,24 @@ public class ChromatographySimulator extends Application {
              CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
                      "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
                      "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
-            String chemicalNameOfInput;
-            String chemicalNameOfRecord;
-            Chemical analyte;
-            double percentWeight;
-            double mgAnalyteInjectedToInlet;
-            double ngAnalyteEnteringColumn;
-            double gAnalyteEnteringColumn;
-            double molecularWeightAnalyte;
-            double molesAnalyteEnteringColumn;
-            double MRFAnalyte;
-            double peakArea;
-            double elutionTime;
-            double injectionTime;
-            double columnAdjustedOverloadMass;
-            double peakFrontingIndex;
-            double peakTailingIndex;
 
             for (CSVRecord record : parser){
+                String chemicalNameOfInput;
+                String chemicalNameOfRecord;
+                Chemical analyte;
+                double percentWeight;
+                double mgAnalyteInjectedToInlet;
+                double gAnalyteEnteringColumn;
+                double ngAnalyteEnteringColumn;
+                double molecularWeightAnalyte;
+                double molesAnalyteEnteringColumn;
+                double MRFAnalyte;
+                double peakArea;
+                double injectionTime;
+                double elutionTime;
+                double columnAdjustedOverloadMass;
+                double peakFrontingIndex;
+                double peakTailingIndex;
                 if (record.getRecordNumber() == 1) continue;
                 chemicalNameOfRecord = record.get("chemicalName");
                 for (InjectionUIRecord input : userInputs){
@@ -156,9 +156,6 @@ public class ChromatographySimulator extends Application {
                     columnAdjustedOverloadMass = analyte.adjustedOverloadMass();
                     peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX;
                     if (ngAnalyteEnteringColumn > columnAdjustedOverloadMass){
-                        System.out.println("too much");
-                        System.out.println("ng analyte = " + ngAnalyteEnteringColumn);
-                        System.out.println("OverloadMass = " + columnAdjustedOverloadMass);
                         peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX + (ngAnalyteEnteringColumn/columnAdjustedOverloadMass);
                     };
                     peakTailingIndex = Peak.IDEAL_PEAK_TAILING_INDEX;
@@ -192,9 +189,9 @@ public class ChromatographySimulator extends Application {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         return spacer;
     }
-    private ImageView makeImageView(String filePath) {
+    private static ImageView makeImageView(String filePath) {
         ImageView imageView = null;
-        URL imageUrl = getClass().getClassLoader().getResource(filePath);
+        URL imageUrl = ChromatographySimulator.class.getClassLoader().getResource(filePath);
         if (imageUrl != null) {
             Image image = new Image(imageUrl.toString());
             imageView = new ImageView(image);
@@ -587,6 +584,37 @@ public class ChromatographySimulator extends Application {
     		return chemicalName;
         }
     }
+    private static class ChemicalView {
+        private String casNumber;
+        private SimpleStringProperty chemicalName;
+        private ImageView chemicalImage;
+        private SimpleStringProperty concentration = new SimpleStringProperty("0.0");
+
+        public ChemicalView(String casNumber, String chemicalName) {
+            this.casNumber = casNumber;
+            this.chemicalName = new SimpleStringProperty(chemicalName);
+            this.chemicalImage = makeImageView(casNumber + "noName.png");
+        }
+
+        public String getName(){
+            return chemicalName.getValue();
+        }
+        public SimpleStringProperty nameProperty(){
+            return chemicalName;
+        }
+        public ImageView getImage(){
+            return chemicalImage;
+        }
+        public String getConcentration() {
+            return concentration.getValue();
+        }
+        public SimpleStringProperty concentrationProperty(){
+            return concentration;
+        }
+        public void setConcentration(String newValue) {
+            concentration.set(newValue);
+        }
+    }
     private static class Peak implements Comparable {
         private final Chemical analyte;
         private final double peakArea;
@@ -616,9 +644,9 @@ public class ChromatographySimulator extends Application {
             private GaussianCurve ascendingCurve;
             private GaussianCurve descendingCurve;
             // Curve-shape modulators
-            private double peakTailingIndex = 1.0; // TODO: 4/5/2023
-            private double peakFrontingIndex = 1.0;// TODO: 4/5/2023
-            private double peakBroadeningIndex = 1.0;// TODO: 4/5/2023
+            private double peakTailingIndex = 1.0;
+            private double peakFrontingIndex = 1.0;
+            private double peakBroadeningIndex = 1.0;
             // Implement these indices so that each peak's degree of peak tailing, fronting,
             // or symmetric broadening depends on the factors according to the README.txt
 
@@ -665,7 +693,7 @@ public class ChromatographySimulator extends Application {
         // otherwise the peak would not plot correctly. The updated retentionTime will be 3 frames after the currentTime().
         private void updatePeak(){
             // Update Elution Time
-            elutionTime = calcElutionTime(); // // TODO: 4/25/2023 Gotta fix bug that occurs when elutionTime crashes super hard due to column damage
+            elutionTime = calcElutionTime();
 
             // Update Peak Shape
             updatePeakShape();
@@ -831,7 +859,7 @@ public class ChromatographySimulator extends Application {
         Pane titlePane = new Pane();
         ImageView title = makeImageView("title.png");
         title.setPreserveRatio(true);
-        title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58); // TODO: 5/11/2023 Watch this
+        title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
         title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
         title.setY(SCREEN_BOUNDS.getMinY() + SCREEN_BOUNDS.getHeight() / 2 - title.prefHeight(title.getFitWidth()) / 2);
         titlePane.getChildren().add(title);
@@ -883,13 +911,19 @@ public class ChromatographySimulator extends Application {
         loadProgress = new ProgressBar();
         loadProgress.setStyle("-fx-accent: #ff6900");
         loadProgress.setPrefWidth(SCREEN_BOUNDS.getWidth()*.30);
+        loadProgress.setVisible(false);
         progressText = new Label("Synthesizing Chemicals . . .");
         progressText.setAlignment(Pos.CENTER);
         progressText.setFont(Font.font(null,FontWeight.EXTRA_BOLD,10));
         progressText.setTextFill(Color.WHITE);
-        launchButton = new Button("Launch");
-        launchButton.setDisable(true); // Initially the button should be hidden
+        progressText.setVisible(false);
+        launchButton = new Button();
+        FontIcon launchIcon = new FontIcon(MaterialDesign.MDI_ARROW_RIGHT_BOLD_HEXAGON_OUTLINE);
+        launchIcon.setIconSize((int) (SCREEN_BOUNDS.getWidth()*0.05));
+        launchIcon.setFill(Color.web("#ff6900"));
+        launchButton.setGraphic(launchIcon);
             launchButton.setOnAction(e -> {
+                launchButton.setDisable(true);
                 FadeTransition fadeSplash = new FadeTransition(Duration.seconds(1.2), splashScreenPane);
                 fadeSplash.setFromValue(1.0);
                 fadeSplash.setToValue(0.0);
@@ -921,7 +955,7 @@ public class ChromatographySimulator extends Application {
         mainStage.setMaximized(true);
         mainStage.show();
     }
-    private void showSplash(Stage initStage, Task<?> task, InitCompletionHandler initCompletionHandler
+    /*private void showSplash(Stage initStage, Task<?> task, InitCompletionHandler initCompletionHandler
     ) {
         progressText.textProperty().bind(task.messageProperty());
         loadProgress.progressProperty().bind(task.progressProperty());
@@ -942,40 +976,63 @@ public class ChromatographySimulator extends Application {
         initStage.initStyle(StageStyle.DECORATED);
         initStage.setAlwaysOnTop(true);
         initStage.show();
+    }*/
+
+    private void showSplash(Stage initStage) {
+        Scene splashScene = new Scene(splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
+        initStage.setMaximized(true);
+        initStage.setScene(splashScene);
+        initStage.initStyle(StageStyle.DECORATED);
+        initStage.setAlwaysOnTop(true);
+        initStage.show();
     }
     public interface InitCompletionHandler {
         void complete();
     }
     @Override
     public void start(Stage initStage) {
-        final Task<ObservableList<Chemical>> loadingTask = new Task<ObservableList<Chemical>>() {
+        final Task<Void> loadingTask = new Task<Void>() {
             @Override
-            protected ObservableList<Chemical> call() {
+            protected Void call() {
                 updateMessage("Synthesizing Chemicals . . .");
 
-                allChemsObsvbl = FXCollections.<Chemical>observableArrayList();
                 try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
                      CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
                              "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
                              "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
                     int iterations = 0;
                     for (CSVRecord record : parser) {
+//                        if (iterations > 300) break;
                         if (record.getRecordNumber() == 1) continue;
+                        String cas = record.get("CAS");
                         String chemicalName = record.get("chemicalName");
-                        Chemical currentChemical = new Chemical(chemicalName);
-                        allChemsObsvbl.add(currentChemical);
+                        ChemicalView chemicalView = new ChemicalView(cas,chemicalName);
+                        Platform.runLater(() -> obsListChemicalViews.add(chemicalView));
                         updateProgress(iterations + 1, CHEM_DATA_SIZE);
-                        updateMessage("Synthesizing Chemical . . . " + chemicalName);
-//                        Thread.sleep(0);
                         iterations++;
                     }
                     updateMessage("All Chemicals Synthesized");
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-                return allChemsObsvbl;
+                return null;
             }
+
+           /* protected void cancelled(){
+                System.out.println("cancelled");
+            }
+
+            @Override
+            protected void failed(){
+                System.out.println("failed");
+            }
+
+            @Override
+            protected void succeeded(){
+                System.out.println("succeeded");
+            }*/
         };
+        new Thread(loadingTask).start();
 
 
 
@@ -1260,7 +1317,7 @@ public class ChromatographySimulator extends Application {
         injectButton.setPrefWidth(140);
         injectButton.setPrefHeight(45);
         injectButton.setOnAction(e1 -> {
-            Stage injectStage = new Stage(StageStyle.DECORATED); // TODO: 5/11/2023 THIS WHY LOOKS WEIRD
+            Stage injectStage = new Stage(StageStyle.DECORATED);
             injectStage.initOwner(mainStage);
             injectStage.initModality(Modality.APPLICATION_MODAL);
             injectStage.setTitle("Injection");
@@ -1280,13 +1337,20 @@ public class ChromatographySimulator extends Application {
             InjectionUIRecord concentrationInput;
             ArrayList<InjectionUIRecord> concentrationInputs = new ArrayList<>();
 
-            for (CSVRecord record : parser) {
+            /*for (CSVRecord record : parser) {
                 // Add chemical names
                 String chemicalName = record.get(1);
                 Label label = new Label(chemicalName);
                 label.setPadding(new Insets(5, 0, 5, 15));
                 GridPane.setHalignment(label, HPos.RIGHT);
                 uiListOfChems.add(label, 0, row);
+
+                // Add validation label 1
+                Label validationLabel1 = new Label("X");
+                validationLabel1.setTextFill(Color.CRIMSON);
+                validationLabel1.setVisible(false);
+                validationLabel1.setPadding(new Insets(0, 3, 0, 3));
+                uiListOfChems.add(validationLabel1, 1, row);
 
                 // Add user input of concentration and add them to the observable list that watches
                 // whether they are disabled (invalid user input)
@@ -1295,12 +1359,7 @@ public class ChromatographySimulator extends Application {
                 concentrationInput.textField().setPadding(new Insets(5,0,5,0));
                 uiListOfChems.add(concentrationInput.textField(), 2, row);
 
-                Label validationLabel1 = new Label("X");
-                validationLabel1.setTextFill(Color.CRIMSON);
-                validationLabel1.setVisible(false);
-                validationLabel1.setPadding(new Insets(0, 3, 0, 3));
-                uiListOfChems.add(validationLabel1, 1, row);
-
+                // Add validation label 2
                 Label validationLabel2 = new Label("Must be: 0.0% to 100.0%");
                 validationLabel2.setTextFill(Color.CRIMSON);
                 validationLabel2.setVisible(false);
@@ -1362,12 +1421,14 @@ public class ChromatographySimulator extends Application {
                     sum += concentrationValue.get();
                 }
                 return sum;
-            }, concentrationValues.toArray(new DoubleProperty[0]));
+            }, concentrationValues.toArray(new DoubleProperty[0]));*/
 
             // Make the uiListOfChems scrollable
-            ScrollPane chemListScrollPane = new ScrollPane();
+           /* ScrollPane chemListScrollPane = new ScrollPane();
             chemListScrollPane.setContent(uiListOfChems);
-            chemListScrollPane.setPadding(new Insets(20));
+            chemListScrollPane.setPadding(new Insets(20));*/
+
+
 
             // Create finalizingButtons BorderPane
             BorderPane finalizingButtons = new BorderPane();
@@ -1380,18 +1441,18 @@ public class ChromatographySimulator extends Application {
                         Label analyteValueLabel = new Label("TOTAL %WEIGHT: ");
                           analyteValueLabel.setTextFill(Color.DODGERBLUE);
                         Label loadValue = new Label();
-                          totalValueAllInputs.addListener(e -> {
+                          /*totalValueAllInputs.addListener(e -> {
                               if (totalValueAllInputs.doubleValue() > 100.0) {
                                   loadValue.setTextFill(Color.CRIMSON);
                               } else {
                                   loadValue.setTextFill(Color.DODGERBLUE);
                               }
-                          });
+                          });*/
                           loadValue.setStyle("-fx-font-weight: bold");
-                          loadValue.textProperty().bind(totalValueAllInputs.asString("%.2f"));
+                          /*loadValue.textProperty().bind(totalValueAllInputs.asString("%.2f"));*/
                       topInfoValues.getChildren().addAll(analyteValueLabel,loadValue);
                     Label loadValueInvalidMarker = new Label();
-                      loadValueInvalidMarker.visibleProperty().bind(anyInvalidInput);
+                      /*loadValueInvalidMarker.visibleProperty().bind(anyInvalidInput);*/
                       loadValueInvalidMarker.setPadding(new Insets(15,0,0,0));
                       loadValueInvalidMarker.setText("Invalid Value Found: Check Left Window");
                       loadValueInvalidMarker.setTextFill(Color.CRIMSON);
@@ -1427,17 +1488,17 @@ public class ChromatographySimulator extends Application {
                         oscillatorTranslator.setAutoReverse(true);
                         oscillatorTranslator.setInterpolator(Interpolator.LINEAR);
                         // Tick Mark Background Image
-                        ImageView imageView = null;
+                        ImageView tickmarkImage = null;
                         URL imageUrl = getClass().getClassLoader().getResource("tickmarks.png");
                         if (imageUrl != null) {
                             Image image = new Image(imageUrl.toString());
-                            imageView = new ImageView(image);
-                            imageView.setFitWidth(280);
+                            tickmarkImage = new ImageView(image);
+                            tickmarkImage.setFitWidth(280);
                         } else {
                             System.err.println("Image not found");
                         }
                   // Set up the Injection MiniGame
-                  injectionMinigame.getChildren().addAll(imageView,targetBox,oscillator);
+                  injectionMinigame.getChildren().addAll(tickmarkImage,targetBox,oscillator);
                 finalizingButtons.setCenter(injectionMinigame);
                 // Bottom -- All Clear Buttons
                 VBox bottomInfo = new VBox();
@@ -1450,14 +1511,14 @@ public class ChromatographySimulator extends Application {
                     finalizeButton.setOnAction(e3 -> {
                         if(finalizeButton.getText().equals("Finalize Sample")){
                             finalizeButton.setText("Edit Sample");
-                            chemListScrollPane.setDisable(!chemListScrollPane.isDisabled());
+                            /*chemListScrollPane.setDisable(!chemListScrollPane.isDisabled());*/
                             isFinalized.set(true);
                             oscillatorTranslator.play();
                             return;
                         }
                         if(finalizeButton.getText().equals("Edit Sample")){
                             finalizeButton.setText("Finalize Sample");
-                            chemListScrollPane.setDisable(!chemListScrollPane.isDisabled());
+                            /*chemListScrollPane.setDisable(!chemListScrollPane.isDisabled());*/
                             isFinalized.set(false);
                             oscillatorTranslator.stop();
                             return;
@@ -1481,14 +1542,14 @@ public class ChromatographySimulator extends Application {
                     techniqueButton.disableProperty().bind(techniqueScore.greaterThan(0.0)
                             .or(isFinalized.not()));
                     finalizeButton.disableProperty().bind(techniqueScore.greaterThan(0.0)
-                            .or(anyInvalidInput)
-                            .or(totalValueAllInputs.greaterThan(100.0)));
+                            /*.or(anyInvalidInput)
+                            .or(totalValueAllInputs.greaterThan(100.0))*/);
                   Button allClearButton = new Button("All Clear: Inject");
                     allClearButton.setPadding(new Insets(10,50,10,50));
                     BorderPane.setAlignment(allClearButton, Pos.CENTER);
-                    allClearButton.disableProperty().bind(anyInvalidInput
+                    /*allClearButton.disableProperty().bind(anyInvalidInput
                             .or(totalValueAllInputs.greaterThan(100.0))
-                            .or(techniqueScore.lessThan(0.0001)));
+                            .or(techniqueScore.isEqualTo(0)));*/
                     allClearButton.setOnAction(e5 -> {
                         ArrayList<InjectionUIRecord> userInputs = new ArrayList<>();
                         for(InjectionUIRecord chemical : concentrationInputs){
@@ -1505,13 +1566,147 @@ public class ChromatographySimulator extends Application {
                 finalizingButtons.setBottom(bottomInfo);
                 bottomInfo.setAlignment(Pos.CENTER);
 
+
+            // CUSTOM SAMPLE MIXTURE PANE -- TABLEVIEW
+                // CUSTOM SAMPLE MIXTURE PANE -- SEARCH FILTERS
+                FilteredList<ChemicalView> filteredData1 = new FilteredList<>(obsListChemicalViews, s -> true);
+                FilteredList<ChemicalView> filteredData2 = new FilteredList<>(filteredData1, s -> true);
+                FilteredList<ChemicalView> filteredData3 = new FilteredList<>(filteredData2, s -> true);
+
+                TextField searchField1 = new TextField();
+                searchField1.setPromptText("Search/Filter Chemicals By Name <AND FILTER>...");
+                searchField1.textProperty().addListener(obs->{
+                    String filter = searchField1.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData1.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData1.setPredicate(s -> s.getName().toLowerCase().contains(filter.toLowerCase()));
+                    }
+                });
+
+                TextField searchField2 = new TextField();
+                searchField2.setPromptText("Search/Filter Chemicals By Name...");
+                searchField2.textProperty().addListener(obs->{
+                    String filter = searchField2.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData2.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData2.setPredicate(s -> s.getName().toLowerCase().contains(filter.toLowerCase()));
+                    }
+                });
+                TextField searchField3 = new TextField();
+                searchField3.setPromptText("Search/Filter Chemicals By Name...");
+                searchField3.textProperty().addListener(obs->{
+                    String filter = searchField3.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData3.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData3.setPredicate(s -> s.getName().toLowerCase().contains(filter.toLowerCase()));
+                    }
+                });
+
+            TableView<ChemicalView> tableViewCustomSampleMixture = new TableView<ChemicalView>(filteredData3);
+            tableViewCustomSampleMixture.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+            TableColumn<ChemicalView, String> nameColumn1 = new TableColumn<>("Chemical Name");
+            nameColumn1.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
+            TableColumn<ChemicalView, ImageView> imageColumn = new TableColumn<>("Structure");
+            imageColumn.setSortable(false);
+            imageColumn.setCellValueFactory(cell -> {
+                ImageView chemicalImageView = cell.getValue().getImage();
+                chemicalImageView.managedProperty().bind(chemicalImageView.visibleProperty());
+                chemicalImageView.setPreserveRatio(true);
+                chemicalImageView.fitWidthProperty().bind(cell.getTableColumn().widthProperty().multiply(0.8));
+                return new SimpleObjectProperty<>(chemicalImageView);
+            });
+            tableViewCustomSampleMixture.getColumns().addAll(nameColumn1, imageColumn);
+
+
+
+
+//            VBox searchFields = new VBox(searchField1, searchField2, searchField3);
+//            searchFields.setSpacing(5);
+
+            // Initialize Table View for "Set Concentrations" Pane
+            TableView<ChemicalView> tableViewSampleMixChemicals = new TableView<ChemicalView>();
+
+            // Bind Selected Values from "Define Custom Sample Mixture" Pane into the "Set Concentrations" Pane
+            VBox addChemicalsToSampleButtons = new VBox();
+            addChemicalsToSampleButtons.setSpacing(5);
+            Button addSelectedChemsButton = new Button("Add Selected To Sample Mixture");
+            addSelectedChemsButton.setOnAction(e->{
+                ObservableList<ChemicalView> userInputs =
+                        FXCollections.observableArrayList(
+                                tableViewCustomSampleMixture
+                                        .getSelectionModel()
+                                        .getSelectedItems()
+                        );
+                tableViewSampleMixChemicals.setItems(userInputs);
+            });
+            addChemicalsToSampleButtons.getChildren().addAll(addSelectedChemsButton, searchField1, searchField2, searchField3);
+            SplitPane tableViewAndButtons = new SplitPane(tableViewCustomSampleMixture, addChemicalsToSampleButtons);
+
+
+            // SET CONCENTRATIONS PANE -- TABLEVIEW
+            // NOTE: Initial TableView object defined above
+            tableViewSampleMixChemicals.setEditable(true);
+            tableViewSampleMixChemicals.getSelectionModel().setCellSelectionEnabled(true);
+
+            TableColumn<ChemicalView, String> nameColumn2 = new TableColumn<>("Chemical Name");
+            nameColumn2.setSortable(true);
+            nameColumn2.setCellValueFactory(cell -> {
+                return cell.getValue().nameProperty();
+            });
+
+            TableColumn<ChemicalView, String> concentrationColumn = new TableColumn<>("Concentration\n(% Weight of 1 uL Injection)");
+            concentrationColumn.setSortable(true);
+            concentrationColumn.setCellValueFactory(cellData -> cellData.getValue().concentrationProperty());
+            concentrationColumn.setCellFactory(TextFieldTableCell.forTableColumn());
+            concentrationColumn.setOnEditCommit(t -> {
+                ChemicalView chemView = ((ChemicalView) t.getTableView().getItems().get(t.getTablePosition().getRow()));
+                chemView.setConcentration(t.getNewValue());
+            });
+            concentrationColumn.setEditable(true);
+            tableViewSampleMixChemicals.getColumns().addAll(nameColumn2, concentrationColumn);
+
+
+            // SAMPLE DEFINITION ACCORDION (ROOT OF LEFT SIDE OF SPLIT PANE)
+            Accordion sampleDefinitionMenus = new Accordion();
+                // DEFINE CUSTOM SAMPLE MIXTURE PANE
+                TitledPane addChemsToSampleMix = new TitledPane("Define Custom Sample Mixture", tableViewAndButtons);
+                    // Create the custom title for the TitledPane
+                    Label customTitle = new Label();
+                    customTitle.setTextFill(Color.BLACK);
+
+                    // If LoadingTask hasn't completed, softly warn user
+                    BooleanBinding loadingBinding = loadingTask.stateProperty().isNotEqualTo(Worker.State.SUCCEEDED);
+                    customTitle.textProperty().bind(
+                            Bindings.when(loadingBinding)
+                                    .then("(Warning: Some Chemicals Still Loading!!)")
+                                    .otherwise("")
+                    );
+                    customTitle.styleProperty().bind(
+                            Bindings.when(loadingBinding)
+                                    .then("-fx-font-weight: bold; -fx-text-fill: blue;")
+                                    .otherwise("-fx-font-weight: normal; -fx-text-fill: black;")
+                    );
+                    addChemsToSampleMix.setGraphic(customTitle);
+                    addChemsToSampleMix.setContentDisplay(ContentDisplay.RIGHT);
+                // SET CONCENTRATIONS PANE
+                TitledPane setConcentrations = new TitledPane("Set Concentrations", tableViewSampleMixChemicals);
+                // ADD PRESET SAMPLE MIXTURES PANE
+                TitledPane addSamplePresets = new TitledPane("Add Preset Sample Mixtures", new Button("B3"));
+            sampleDefinitionMenus.getPanes().addAll(addChemsToSampleMix, setConcentrations, addSamplePresets);
+
             // Add ScrollPane and Vbox to SplitPane
             SplitPane splitPane = new SplitPane();
-            splitPane.setDividerPosition(0,0.61);
-            splitPane.getItems().addAll(chemListScrollPane,finalizingButtons);
+            splitPane.setDividerPosition(0,0.75);
+            splitPane.getItems().addAll(sampleDefinitionMenus,finalizingButtons);
 
             // Create the Scene and add the ScrollPane to it
-            Scene scene = new Scene(splitPane, mainStage.getWidth()-100, mainStage.getHeight()-200);
+            Scene scene = new Scene(splitPane, mainStage.getWidth()*0.80, mainStage.getHeight()*0.80);
             injectStage.setScene(scene);
             injectStage.show();
         });
@@ -1533,8 +1728,6 @@ public class ChromatographySimulator extends Application {
             }else{
                 fire.setIconColor(Color.BLACK);
             }
-
-            System.out.println("allChemsObsvbl = " + allChemsObsvbl);
         });
 
         // SWITCH COLUMN BUTTON
@@ -1552,19 +1745,6 @@ public class ChromatographySimulator extends Application {
         switchColumnButton.setPrefWidth(140);
         switchColumnButton.setPrefHeight(45);
         switchColumnButton.setOnAction( e1 -> {
-            /*Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.getDialogPane().setMaxWidth(350);
-            alert.setHeaderText("Warning: Installing New Columns");
-            Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it.");
-            columnWarning.setFont(Font.font(null, FontPosture.ITALIC,10));
-            columnWarning.setTextFill(Color.DODGERBLUE);
-            columnWarning.setWrapText(true);
-            columnWarning.setMaxWidth(200);
-            alert.getDialogPane().setContent(columnWarning);
-
-            var result1 = alert.showAndWait();
-
-            if (result1.get().getButtonData().equals(ButtonBar.ButtonData.OK_DONE)){*/
                 ChoiceDialog<Column> columnChoices = new ChoiceDialog<>();
 
                 columnChoices.setTitle("Choose A Column");
@@ -2378,7 +2558,6 @@ public class ChromatographySimulator extends Application {
             double currentHighY = yAxis.getUpperBound();
             double yRange = Math.abs(currentHighY - currentLowY);
 
-            // TODO: 4/29/2023
             xAxis.setLowerBound(currentLowX+(0.10*xRange));
             xAxis.setUpperBound(currentHighX-(0.10*xRange));
 //            yAxis.setLowerBound(currentLowY+(0.10*yRange));
@@ -2405,7 +2584,6 @@ public class ChromatographySimulator extends Application {
             double currentHighY = yAxis.getUpperBound();
             double yRange = Math.abs(currentHighY - currentLowY);
 
-            // TODO: 4/29/2023
             xAxis.setLowerBound(Math.max(currentLowX-(xRange*0.10),0));
             xAxis.setUpperBound(currentHighX+(xRange*0.10));
             yAxis.setUpperBound(currentHighY*1.10);
@@ -2419,13 +2597,11 @@ public class ChromatographySimulator extends Application {
         // UTILITY BUTTON
         Button utilityButton = new Button("utility");
         utilityButton.setOnAction(e->{
-            Runtime runtime = Runtime.getRuntime();
+           /* Runtime runtime = Runtime.getRuntime();
             long usedMemory = runtime.totalMemory() - runtime.freeMemory();
             long maxMemory = runtime.maxMemory();
             System.out.println("Used heap memory: " + usedMemory + " bytes");
-            System.out.println("Max heap memory: " + maxMemory + " bytes");
-
-
+            System.out.println("Max heap memory: " + maxMemory + " bytes");*/
         });
 
         // UI-VIEW-PANEL PARENT NODE
@@ -2465,12 +2641,13 @@ public class ChromatographySimulator extends Application {
         mainStage.setScene(mainScene);
         mainStage.show();*/
 
-        showSplash(
+        /*showSplash(
                 initStage,
                 loadingTask,
                 () -> launchButton.setDisable(false)
-        );
-        new Thread(loadingTask).start();
+        );*/
+        showSplash(initStage);
+
 
 
         // Run Simulator

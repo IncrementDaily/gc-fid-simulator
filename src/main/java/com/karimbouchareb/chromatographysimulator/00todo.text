@@ -1,5 +1,10 @@
 https://ctr.fandom.com/wiki/Ring_counts_in_a_SMILES_file#:~:text=One%20way%20to%20compute%20the,the%20most%20chemically%20relevant%20rings.
 
+(NEXTT!!!) Learn to use the JavaFX Scene Builder tool which allows for WAY faster UI iteration and work. Bindings and
+event listeners and all that, I will still have to write inside my controller and application business logic. These
+can be integrated into the Scene Builder; https://www.oracle.com/java/technologies/javase/javafxscenebuilder-info.html
+    - Next Project: learn to write a JavaFX app the correct way (Using FXML and controllers etc and Scene Builder)
+
 (next) Add a column bakeout feature
 
 (NEXT) Add a current time sensor
