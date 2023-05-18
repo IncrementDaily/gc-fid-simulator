@@ -6,12 +6,15 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.*;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
+import javafx.css.Styleable;
 import javafx.geometry.*;
+import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -25,10 +28,12 @@ import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.Paint;
+import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontPosture;
-import javafx.scene.text.FontWeight;
+import javafx.scene.shape.Shape;
+import javafx.scene.text.*;
+import javafx.scene.transform.Transform;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -54,6 +59,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
 
 public class ChromatographySimulator extends Application {
@@ -76,7 +82,7 @@ public class ChromatographySimulator extends Application {
     private ProgressBar loadProgress;
     private Label progressText;
     private Stage mainStage;
-    private Button launchButton;
+//    private Button launchButton;
     private static final Screen SCREEN = Screen.getPrimary();
     private static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
 
@@ -197,7 +203,7 @@ public class ChromatographySimulator extends Application {
             imageView = new ImageView(image);
             return imageView;
         } else {
-            System.out.println("Shit fuck fuck FUCK file not found");
+            System.out.println("Shit");
             return null;
         }
     }
@@ -585,17 +591,22 @@ public class ChromatographySimulator extends Application {
         }
     }
     private static class ChemicalView {
-        private String casNumber;
-        private SimpleStringProperty chemicalName;
-        private ImageView chemicalImage;
+        private final String casNumber;
+        private final SimpleStringProperty chemicalName;
+        private final ImageView chemicalImage;
+        private SimpleObjectProperty imageProperty;
         private SimpleStringProperty concentration = new SimpleStringProperty("0.0");
 
         public ChemicalView(String casNumber, String chemicalName) {
             this.casNumber = casNumber;
             this.chemicalName = new SimpleStringProperty(chemicalName);
             this.chemicalImage = makeImageView(casNumber + "noName.png");
+            this.imageProperty = new SimpleObjectProperty(chemicalImage);
         }
 
+        public String getCas(){
+            return casNumber;
+        }
         public String getName(){
             return chemicalName.getValue();
         }
@@ -605,6 +616,9 @@ public class ChromatographySimulator extends Application {
         public ImageView getImage(){
             return chemicalImage;
         }
+        public SimpleObjectProperty imageProperty(){
+            return imageProperty;
+        }
         public String getConcentration() {
             return concentration.getValue();
         }
@@ -613,6 +627,23 @@ public class ChromatographySimulator extends Application {
         }
         public void setConcentration(String newValue) {
             concentration.set(newValue);
+        }
+        @Override
+        public boolean equals(Object o){
+            if (this == o) return true;
+            if (!(o instanceof ChemicalView)) return false;
+            ChemicalView cV = (ChemicalView) o;
+            return getName().equals(cV.getName()) || getCas().equals(cV.getCas());
+        }
+        @Override
+        public int hashCode(){
+            int result = casNumber.hashCode();
+            result = 31 * result + chemicalName.getValue().hashCode();
+            return result;
+        }
+        @Override
+        public String toString(){
+            return chemicalName.getValue();
         }
     }
     private static class Peak implements Comparable {
@@ -843,16 +874,6 @@ public class ChromatographySimulator extends Application {
     // UI-MANAGEMENT METHODS & INTERFACES
     @Override
     public void init() {
-        try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
-             CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
-                     "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
-                     "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
-            CHEM_DATA_SIZE = (int) parser.getRecords().stream().count();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         // SPLASH SCREEN OBJECTS FOR LOADING
         splashScreenPane.setBackground(Background.fill(Color.BLACK));
         // title
@@ -886,6 +907,16 @@ public class ChromatographySimulator extends Application {
         ImageView travisHead = makeImageView("travisHead.png");
         travisHead.setPreserveRatio(true);
         travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
+        FadeTransition ftTravisHead1 = new FadeTransition(Duration.millis(3000), travisHead);
+        ftTravisHead1.setFromValue(0.0);
+        ftTravisHead1.setToValue(0.0);
+        ftTravisHead1.play();
+        ftTravisHead1.setOnFinished(e->{
+            FadeTransition ftTravisHead2 = new FadeTransition(Duration.millis(7000), travisHead);
+            ftTravisHead2.setFromValue(0.0);
+            ftTravisHead2.setToValue(1.0);
+            ftTravisHead2.play();
+        });
         RotateTransition rtTravisHead = new RotateTransition(Duration.millis(10000), travisHead);
         rtTravisHead.setByAngle(360);
         rtTravisHead.setCycleCount(RotateTransition.INDEFINITE);
@@ -912,30 +943,50 @@ public class ChromatographySimulator extends Application {
         loadProgress.setStyle("-fx-accent: #ff6900");
         loadProgress.setPrefWidth(SCREEN_BOUNDS.getWidth()*.30);
         loadProgress.setVisible(false);
-        progressText = new Label("Synthesizing Chemicals . . .");
+       /* progressText = new Label("Synthesizing Chemicals . . .");
         progressText.setAlignment(Pos.CENTER);
         progressText.setFont(Font.font(null,FontWeight.EXTRA_BOLD,10));
         progressText.setTextFill(Color.WHITE);
-        progressText.setVisible(false);
-        launchButton = new Button();
+        progressText.setVisible(false);*/
+        Button launchButton = new Button();
+        launchButton.setBackground(new Background(
+                 new BackgroundFill(Color.web("#ffaf00")
+                ,new CornerRadii(30)
+                ,Insets.EMPTY)));
         FontIcon launchIcon = new FontIcon(MaterialDesign.MDI_ARROW_RIGHT_BOLD_HEXAGON_OUTLINE);
         launchIcon.setIconSize((int) (SCREEN_BOUNDS.getWidth()*0.05));
         launchIcon.setFill(Color.web("#ff6900"));
         launchButton.setGraphic(launchIcon);
+            launchButton.setOnMouseEntered(e->{
+                launchButton.setBackground(new Background(
+                        new BackgroundFill(Color.web("#8f1b00")
+                                ,new CornerRadii(30)
+                                ,Insets.EMPTY)));
+            });
+            launchButton.setOnMouseExited(e->{
+                launchButton.setBackground(new Background(
+                        new BackgroundFill(Color.web("#ffaf00")
+                                ,new CornerRadii(30)
+                                ,Insets.EMPTY)));
+            });
             launchButton.setOnAction(e -> {
+                RotateTransition rtPermanent = new RotateTransition(Duration.millis(190), travisHead);
+                rtPermanent.setByAngle(360);
+                rtPermanent.setCycleCount(RotateTransition.INDEFINITE);
                 launchButton.setDisable(true);
-                FadeTransition fadeSplash = new FadeTransition(Duration.seconds(1.2), splashScreenPane);
+                rtPermanent.play();
+                FadeTransition fadeSplash = new FadeTransition(Duration.seconds(2.2), splashScreenPane);
                 fadeSplash.setFromValue(1.0);
                 fadeSplash.setToValue(0.0);
-                fadeSplash.setOnFinished(actionEvent -> {
-                  launchButton.sceneProperty().get().getWindow().hide();
-                });
                 fadeSplash.play();
-                showMainStage(root);
+                fadeSplash.setOnFinished(actionEvent -> {
+                    showMainStage(root);
+                    launchButton.sceneProperty().get().getWindow().hide();
+                });
             });
         launch.setLayoutX(SCREEN_BOUNDS.getMinX() + (SCREEN_BOUNDS.getWidth()/2) - loadProgress.getPrefWidth()/2);
         launch.setLayoutY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2)*1.5 - launch.getHeight() / 2);
-        launch.getChildren().addAll(loadProgress, progressText, launchButton);
+        launch.getChildren().addAll(loadProgress, /*progressText,*/ launchButton);
         launchPane.getChildren().add(launch);
 
         splashScreenPane.getChildren().addAll(backgroundScatter,travisHeadPane, wavePane, titlePane, launchPane);
@@ -943,13 +994,6 @@ public class ChromatographySimulator extends Application {
     private void showMainStage(Parent root) {
         mainStage = new Stage(StageStyle.DECORATED);
         mainStage.setTitle("Gas Chromatography Simulator");
-        /*mainStage.getIcons().add(new Image(
-                APPLICATION_ICON
-        ));*/
-
-        /*final ListView<Integer> peopleView = new ListView<>();
-        peopleView.itemsProperty().bind(friends);*/
-
         mainScene = new Scene(root, SCREEN_BOUNDS.getWidth()*0.98, SCREEN_BOUNDS.getHeight()*0.98);
         mainStage.setScene(mainScene);
         mainStage.setMaximized(true);
@@ -1002,7 +1046,7 @@ public class ChromatographySimulator extends Application {
                              "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
                     int iterations = 0;
                     for (CSVRecord record : parser) {
-//                        if (iterations > 300) break;
+//                        if (iterations > 5) break;
                         if (record.getRecordNumber() == 1) continue;
                         String cas = record.get("CAS");
                         String chemicalName = record.get("chemicalName");
@@ -1033,7 +1077,6 @@ public class ChromatographySimulator extends Application {
             }*/
         };
         new Thread(loadingTask).start();
-
 
 
         // Create a NumberAxis for the x-axis (autoranging)
@@ -1572,9 +1615,10 @@ public class ChromatographySimulator extends Application {
                 FilteredList<ChemicalView> filteredData1 = new FilteredList<>(obsListChemicalViews, s -> true);
                 FilteredList<ChemicalView> filteredData2 = new FilteredList<>(filteredData1, s -> true);
                 FilteredList<ChemicalView> filteredData3 = new FilteredList<>(filteredData2, s -> true);
+                FilteredList<ChemicalView> filteredData4 = new FilteredList<>(filteredData3, s -> true);
 
                 TextField searchField1 = new TextField();
-                searchField1.setPromptText("Search/Filter Chemicals By Name <AND FILTER>...");
+                searchField1.setPromptText("Try typing \"ox\" <AND FILTER>...");
                 searchField1.textProperty().addListener(obs->{
                     String filter = searchField1.getText();
                     if(filter == null || filter.length() == 0) {
@@ -1586,7 +1630,7 @@ public class ChromatographySimulator extends Application {
                 });
 
                 TextField searchField2 = new TextField();
-                searchField2.setPromptText("Search/Filter Chemicals By Name...");
+                searchField2.setPromptText("Try typing \"dehyde\" <AND FILTER>...");
                 searchField2.textProperty().addListener(obs->{
                     String filter = searchField2.getText();
                     if(filter == null || filter.length() == 0) {
@@ -1597,85 +1641,331 @@ public class ChromatographySimulator extends Application {
                     }
                 });
                 TextField searchField3 = new TextField();
-                searchField3.setPromptText("Search/Filter Chemicals By Name...");
+                searchField3.setPromptText("Try typing \"ethoxy\" <NOT FILTER>...");
                 searchField3.textProperty().addListener(obs->{
                     String filter = searchField3.getText();
                     if(filter == null || filter.length() == 0) {
                         filteredData3.setPredicate(s -> true);
                     }
                     else {
-                        filteredData3.setPredicate(s -> s.getName().toLowerCase().contains(filter.toLowerCase()));
+                        filteredData3.setPredicate(s -> !(s.getName().toLowerCase().contains(filter.toLowerCase())));
+                    }
+                });
+                TextField searchField4 = new TextField();
+                searchField4.setPromptText("Try typing \"cyclo\" <NOT FILTER>...");
+                searchField4.textProperty().addListener(obs->{
+                    String filter = searchField4.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData4.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData4.setPredicate(s -> !(s.getName().toLowerCase().contains(filter.toLowerCase())));
                     }
                 });
 
-            TableView<ChemicalView> tableViewCustomSampleMixture = new TableView<ChemicalView>(filteredData3);
+            TableView<ChemicalView> tableViewCustomSampleMixture = new TableView<ChemicalView>(filteredData4);
             tableViewCustomSampleMixture.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             TableColumn<ChemicalView, String> nameColumn1 = new TableColumn<>("Chemical Name");
-            nameColumn1.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
+            nameColumn1.setCellValueFactory(cellData -> {
+                return cellData.getValue().nameProperty();
+            });
+            nameColumn1.styleProperty().set("-fx-alignment: CENTER");
             TableColumn<ChemicalView, ImageView> imageColumn = new TableColumn<>("Structure");
             imageColumn.setSortable(false);
-            imageColumn.setCellValueFactory(cell -> {
-                ImageView chemicalImageView = cell.getValue().getImage();
-                chemicalImageView.managedProperty().bind(chemicalImageView.visibleProperty());
+            imageColumn.setCellValueFactory(cellData -> {
+                ImageView chemicalImageView = cellData.getValue().getImage();
                 chemicalImageView.setPreserveRatio(true);
-                chemicalImageView.fitWidthProperty().bind(cell.getTableColumn().widthProperty().multiply(0.8));
-                return new SimpleObjectProperty<>(chemicalImageView);
+                chemicalImageView.fitWidthProperty().bind(cellData.getTableColumn().widthProperty().multiply(0.8));
+                return cellData.getValue().imageProperty();
             });
             tableViewCustomSampleMixture.getColumns().addAll(nameColumn1, imageColumn);
 
 
+            // DEFINE SAMPLE MIXTURE PANE -- BUTTONS
+            VBox defineCustomMixtureButtonsRoot = new VBox();
+            defineCustomMixtureButtonsRoot.setSpacing(5);
+
+                // SHOW/HIDE STRUCTURES BUTTON
+                Button showHideStructuresButton = new Button("Hide Structures");
+                BooleanProperty isStructureColumnVisible = new SimpleBooleanProperty(true);
+                imageColumn.visibleProperty().bind(isStructureColumnVisible);
+                showHideStructuresButton.setOnAction(e -> {
 
 
-//            VBox searchFields = new VBox(searchField1, searchField2, searchField3);
-//            searchFields.setSpacing(5);
+                    isStructureColumnVisible.set(!isStructureColumnVisible.get());
+                    if (isStructureColumnVisible.get()) {
+                        showHideStructuresButton.setText("Hide Structures");
+                    } else {
+                        showHideStructuresButton.setText("Show Structures");
+                    }
+                 });
 
-            // Initialize Table View for "Set Concentrations" Pane
-            TableView<ChemicalView> tableViewSampleMixChemicals = new TableView<ChemicalView>();
+                // SELECT ALL DISPLAYED BUTTON
+                Button selectAllButton = new Button("Select All Displayed");
+                selectAllButton.setOnAction(e ->{
+                    tableViewCustomSampleMixture.getSelectionModel().clearSelection();
+                    for (ChemicalView chemView : filteredData4){
+                        tableViewCustomSampleMixture.getSelectionModel().select(chemView);
+                    }
+                });
 
-            // Bind Selected Values from "Define Custom Sample Mixture" Pane into the "Set Concentrations" Pane
-            VBox addChemicalsToSampleButtons = new VBox();
-            addChemicalsToSampleButtons.setSpacing(5);
-            Button addSelectedChemsButton = new Button("Add Selected To Sample Mixture");
-            addSelectedChemsButton.setOnAction(e->{
-                ObservableList<ChemicalView> userInputs =
-                        FXCollections.observableArrayList(
-                                tableViewCustomSampleMixture
-                                        .getSelectionModel()
-                                        .getSelectedItems()
-                        );
-                tableViewSampleMixChemicals.setItems(userInputs);
-            });
-            addChemicalsToSampleButtons.getChildren().addAll(addSelectedChemsButton, searchField1, searchField2, searchField3);
-            SplitPane tableViewAndButtons = new SplitPane(tableViewCustomSampleMixture, addChemicalsToSampleButtons);
+                // TIPS BUTTON
+                Button defineCustomMixTipsButton = new Button();
+                defineCustomMixTipsButton.setAlignment(Pos.CENTER);
+                FontIcon tip1 = new FontIcon(FontAwesome.LIGHTBULB_O);
+                tip1.setIconSize(30);
+                tip1.setIconColor(Color.DODGERBLUE);
+                defineCustomMixTipsButton.setGraphic(tip1);
+                defineCustomMixTipsButton.setOnAction(e->{
+                    Alert defineCustomMixInfo = new Alert(Alert.AlertType.INFORMATION);
+                    defineCustomMixInfo.getDialogPane().setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
+                    defineCustomMixInfo.setTitle("Tips");
+                    defineCustomMixInfo.setHeaderText("Tips For Setting Your Sample Mixture");
+                    Label content = new Label("""
+                            (1) Try the AND and NOT filters
+                            (2) (HOLD)CTRL + CLICK to select multiple chemicals one at a time
+                            (3) (HOLD)SHIFT + CLICK to select multiple chemicals all at once
+                            (4) Resize the Structure Column by CLICK-N-DRAG on the column heading edges
+                            (5) Hide the Structure Column for easier selection"""
+                    );
+                    content.setWrapText(true);
+                    content.setTextFill(Color.DODGERBLUE);
+                    content.setFont(Font.font(null, FontPosture.ITALIC, 10));
+                    content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
+                    defineCustomMixInfo.getDialogPane().setContent(content);
+                    defineCustomMixInfo.show();
+                });
+
+            defineCustomMixtureButtonsRoot.getChildren().addAll(defineCustomMixTipsButton, createVSpacer(), searchField1,
+                    searchField2, searchField3, searchField4, showHideStructuresButton, selectAllButton, createVSpacer());
+            defineCustomMixtureButtonsRoot.setPadding(new Insets(10));
+            defineCustomMixtureButtonsRoot.setAlignment(Pos.CENTER);
+            SplitPane defineSampMixSplitPane = new SplitPane(tableViewCustomSampleMixture, defineCustomMixtureButtonsRoot);
+            defineSampMixSplitPane.setDividerPosition(0,0.69);
+            defineSampMixSplitPane.setPadding(new Insets(10));
 
 
             // SET CONCENTRATIONS PANE -- TABLEVIEW
-            // NOTE: Initial TableView object defined above
-            tableViewSampleMixChemicals.setEditable(true);
-            tableViewSampleMixChemicals.getSelectionModel().setCellSelectionEnabled(true);
+            ObservableList<ChemicalView> userInputs = FXCollections.observableArrayList();
+                // SET CONCENTRATIONS PANE -- SEARCH FILTERS
+                FilteredList<ChemicalView> filteredData5 = new FilteredList<>(userInputs, s -> true);
+                FilteredList<ChemicalView> filteredData6 = new FilteredList<>(filteredData5, s -> true);
+                FilteredList<ChemicalView> filteredData7 = new FilteredList<>(filteredData6, s -> true);
+                FilteredList<ChemicalView> filteredData8 = new FilteredList<>(filteredData7, s -> true);
+
+                TextField searchField5 = new TextField();
+                searchField5.setPromptText("Search/Filter <AND FILTER>...");
+                searchField5.textProperty().addListener(obs->{
+                    String filter = searchField5.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData5.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData5.setPredicate(s -> s.getName().toLowerCase().contains(filter.toLowerCase()));
+                    }
+                });
+
+                TextField searchField6 = new TextField();
+                searchField6.setPromptText("Search/Filter <AND FILTER>...");
+                searchField6.textProperty().addListener(obs->{
+                    String filter = searchField6.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData6.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData6.setPredicate(s -> s.getName().toLowerCase().contains(filter.toLowerCase()));
+                    }
+                });
+                TextField searchField7 = new TextField();
+                searchField7.setPromptText("Search/Filter <NOT FILTER>...");
+                searchField7.textProperty().addListener(obs->{
+                    String filter = searchField7.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData7.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData7.setPredicate(s -> !(s.getName().toLowerCase().contains(filter.toLowerCase())));
+                    }
+                });
+                TextField searchField8 = new TextField();
+                searchField8.setPromptText("Search/Filter <NOT FILTER>...");
+                searchField8.textProperty().addListener(obs->{
+                    String filter = searchField8.getText();
+                    if(filter == null || filter.length() == 0) {
+                        filteredData8.setPredicate(s -> true);
+                    }
+                    else {
+                        filteredData8.setPredicate(s -> !(s.getName().toLowerCase().contains(filter.toLowerCase())));
+                    }
+                });
+                // -- END SEARCH FILTERS
+
+            TableView<ChemicalView> tableViewSetConcentrations = new TableView<ChemicalView>(filteredData8);
+            tableViewSetConcentrations.setEditable(true);
+            tableViewSetConcentrations.getSelectionModel().setCellSelectionEnabled(true);
+            tableViewSetConcentrations.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+            // -- END TABLEVIEW
+
+            // SET CONCENTRATIONS PANE -- BUTTONS (+CARVE-OUT FROM DEFINE SAMPLE MIXTURE PANE)
+                // -- BEGIN CARVE-OUT: ADD SELECTED BUTTON
+                Button addSelectedChemsButton = new Button("Add Selected To Sample Mixture");
+                addSelectedChemsButton.setWrapText(true);
+                addSelectedChemsButton.textAlignmentProperty().set(TextAlignment.CENTER);
+                addSelectedChemsButton.setTextFill(Color.DODGERBLUE);
+                addSelectedChemsButton.setFont(Font.font(null,FontWeight.BOLD,15));
+                    Label helperLabelAddSel = new Label ("Next: Click \"Set Concentrations\" Below");
+                    helperLabelAddSel.setTextFill(Color.DODGERBLUE);
+                    helperLabelAddSel.setFont(Font.font(null, FontPosture.ITALIC, 10));
+                    RotateTransition rtHelperLabel = new RotateTransition(Duration.millis(110), helperLabelAddSel);
+                    rtHelperLabel.setAutoReverse(true);
+                    rtHelperLabel.setByAngle(2.5);
+                    rtHelperLabel.setCycleCount(2);
+                addSelectedChemsButton.setOnAction(e->{
+                    userInputs.addAll(FXCollections.observableArrayList(
+                            tableViewCustomSampleMixture
+                                    .getSelectionModel()
+                                    .getSelectedItems()
+                    ));
+                    userInputs.setAll(userInputs.stream().distinct().collect(Collectors.toList()));
+//                    tableViewSetConcentrations.setItems(filteredData8);
+                    rtHelperLabel.play();
+                });
+                defineCustomMixtureButtonsRoot.getChildren().addAll(addSelectedChemsButton, helperLabelAddSel, createVSpacer());
+                // -- END CARVE-OUT
 
             TableColumn<ChemicalView, String> nameColumn2 = new TableColumn<>("Chemical Name");
+            nameColumn2.prefWidthProperty().bind(tableViewSetConcentrations.widthProperty().multiply(0.50));
             nameColumn2.setSortable(true);
             nameColumn2.setCellValueFactory(cell -> {
                 return cell.getValue().nameProperty();
             });
 
-            TableColumn<ChemicalView, String> concentrationColumn = new TableColumn<>("Concentration\n(% Weight of 1 uL Injection)");
+            TableColumn<ChemicalView, String> concentrationColumn = new TableColumn<>("% Weight of 1 uL Injection");
             concentrationColumn.setSortable(true);
-            concentrationColumn.setCellValueFactory(cellData -> cellData.getValue().concentrationProperty());
+            concentrationColumn.prefWidthProperty().bind(tableViewSetConcentrations.widthProperty().multiply(0.50));
+            concentrationColumn.styleProperty().set("-fx-alignment: CENTER");
+           /* concentrationColumn.setCellFactory( column -> {
+                TextFieldTableCell<ChemicalView, String> cell = new TextFieldTableCell<>();
+                cell.setAlignment(Pos.CENTER);
+                return cell;
+            });*/
             concentrationColumn.setCellFactory(TextFieldTableCell.forTableColumn());
-            concentrationColumn.setOnEditCommit(t -> {
-                ChemicalView chemView = ((ChemicalView) t.getTableView().getItems().get(t.getTablePosition().getRow()));
-                chemView.setConcentration(t.getNewValue());
-            });
+            concentrationColumn.setCellValueFactory(cellData -> cellData.getValue().concentrationProperty());
+//            concentrationColumn.setOnEditCommit(t -> {
+//                ChemicalView chemView = ((ChemicalView) t.getTableView().getItems().get(t.getTablePosition().getRow()));
+//                chemView.setConcentration(t.getNewValue());
+//            });
             concentrationColumn.setEditable(true);
-            tableViewSampleMixChemicals.getColumns().addAll(nameColumn2, concentrationColumn);
+            tableViewSetConcentrations.getColumns().addAll(nameColumn2, concentrationColumn);
+
+            VBox setConcButtonsVBoxRoot = new VBox();
+            setConcButtonsVBoxRoot.setSpacing(5);
+                // SET VAL FOR SELECTED BUTTON
+                HBox setValToSelectedHBox = new HBox(5);
+                setValToSelectedHBox.setAlignment(Pos.CENTER);
+                    Button setValToSelectedButton = new Button("Set Value Of All SELECTED To:");
+                    TextField setValToSelectedInputField = new TextField();
+                    setValToSelectedButton.setOnAction(e->{
+                        ObservableList<ChemicalView> selectedInputs =
+                                tableViewSetConcentrations
+                                    .getSelectionModel()
+                                    .getSelectedItems();
+                        for (ChemicalView chemView : selectedInputs){
+                            chemView.concentrationProperty().set(setValToSelectedInputField.textProperty().getValue());
+                        }
+                    });
+                setValToSelectedHBox.getChildren().addAll(setValToSelectedButton, setValToSelectedInputField);
+
+                // SET VAL FOR ALL BUTTON
+                HBox setValForAllHBox = new HBox(5);
+                setValForAllHBox.setAlignment(Pos.CENTER);
+                Button setValForAllButton = new Button("Set Value of All To:");
+                TextField setValAllInputField = new TextField();
+                setValForAllButton.setOnAction(e->{
+                    for (ChemicalView chemView : userInputs){
+                        chemView.concentrationProperty().set(setValAllInputField.textProperty().getValue());
+                    }
+                });
+                setValForAllHBox.getChildren().addAll(setValForAllButton, setValAllInputField);
+
+                // REMOVE SELECTED BUTTON
+                Button removeSelectedButton = new Button("Remove Selected");
+                removeSelectedButton.setOnAction(e->{
+                    ObservableList<ChemicalView> selectedInputs =
+                            tableViewSetConcentrations
+                                    .getSelectionModel()
+                                    .getSelectedItems();
+                    List<ChemicalView> toRemove = new ArrayList<>(selectedInputs);
+                    userInputs.removeAll(toRemove);
+                });
+
+                // REMOVE ALL BUTTON
+                Button removeAllButton = new Button("Remove All");
+                removeAllButton.setOnAction(e->{
+                    userInputs.clear();
+                });
+
+                // TIPS BUTTON
+                Button setConcTipsButton = new Button();
+                setConcTipsButton.setAlignment(Pos.CENTER);
+                FontIcon tip2 = new FontIcon(FontAwesome.LIGHTBULB_O);
+                tip2.setIconSize(30);
+                tip2.setIconColor(Color.DODGERBLUE);
+                setConcTipsButton.setGraphic(tip2);
+                setConcTipsButton.setOnAction(e->{
+                    Alert defineCustomMixInfo = new Alert(Alert.AlertType.INFORMATION);
+                    defineCustomMixInfo.getDialogPane().setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
+                    defineCustomMixInfo.setTitle("Tips");
+                    defineCustomMixInfo.setHeaderText("Tips For Setting Concentrations");
+                    Label content = new Label("(1) First, define your Sample Mixture above (otherwise, you'll see \"No content in table\")"
+                            + "\n(2) Set values using the buttons below (also, use the AND and NOT filters)"
+                            + "\n(3) You can also set values by DOUBLE-CLICK -> TYPE VALUE -> ENTER"
+                            + "\n(4) If your peaks come out asymmetrical, consider reduced concentrations (or a higher split ratio)"
+                    );
+                    content.setWrapText(true);
+                    content.setTextFill(Color.DODGERBLUE);
+                    content.setFont(Font.font(null, FontPosture.ITALIC, 10));
+                    content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
+                    defineCustomMixInfo.getDialogPane().setContent(content);
+                    defineCustomMixInfo.show();
+                });
+
+                Label helperLabelConcSet = new Label ("Next: Click \"Finalize Sample\" on the Right");
+                helperLabelConcSet.setTextFill(Color.DODGERBLUE);
+                helperLabelConcSet.setFont(Font.font(null, FontPosture.ITALIC, 10));
+               /* RotateTransition rtHelperLabel = new RotateTransition(Duration.millis(110), helperLabelAddSel);
+                rtHelperLabel.setAutoReverse(true);
+                rtHelperLabel.setByAngle(2.5);
+                rtHelperLabel.setCycleCount(2);
+                rtHelperLabel.play();*/
+
+
+                // SELECT ALL BUTTON
+             /*   Button selectAllButton = new Button("Select All Displayed");
+                selectAllButton.setOnAction(e->{
+                    ObservableList<ChemicalView> displayedChems = tableViewSetConcentrations.getItems();
+                    for (ChemicalView chemView : displayedChems){
+                        chemView.
+                    }
+                });*/
+
+            setConcButtonsVBoxRoot.getChildren().addAll(setConcTipsButton, createVSpacer(), searchField5, searchField6, searchField7,
+                    searchField8, setValToSelectedHBox, setValForAllHBox, removeSelectedButton,
+                    removeAllButton, helperLabelConcSet,createVSpacer());
+            setConcButtonsVBoxRoot.setPadding(new Insets(10));
+            setConcButtonsVBoxRoot.setAlignment(Pos.CENTER);
+            SplitPane setConcSplitPane = new SplitPane(tableViewSetConcentrations, setConcButtonsVBoxRoot);
+            setConcSplitPane.setPadding(new Insets(10));
+            setConcSplitPane.setDividerPosition(0,0.60);
+
+
+
 
 
             // SAMPLE DEFINITION ACCORDION (ROOT OF LEFT SIDE OF SPLIT PANE)
             Accordion sampleDefinitionMenus = new Accordion();
                 // DEFINE CUSTOM SAMPLE MIXTURE PANE
-                TitledPane addChemsToSampleMix = new TitledPane("Define Custom Sample Mixture", tableViewAndButtons);
+                TitledPane defineSampMixTitlePane = new TitledPane("Define Custom Sample Mixture", defineSampMixSplitPane);
                     // Create the custom title for the TitledPane
                     Label customTitle = new Label();
                     customTitle.setTextFill(Color.BLACK);
@@ -1692,13 +1982,13 @@ public class ChromatographySimulator extends Application {
                                     .then("-fx-font-weight: bold; -fx-text-fill: blue;")
                                     .otherwise("-fx-font-weight: normal; -fx-text-fill: black;")
                     );
-                    addChemsToSampleMix.setGraphic(customTitle);
-                    addChemsToSampleMix.setContentDisplay(ContentDisplay.RIGHT);
+                    defineSampMixTitlePane.setGraphic(customTitle);
+                    defineSampMixTitlePane.setContentDisplay(ContentDisplay.RIGHT);
                 // SET CONCENTRATIONS PANE
-                TitledPane setConcentrations = new TitledPane("Set Concentrations", tableViewSampleMixChemicals);
+                TitledPane setConcTitlePane = new TitledPane("Set Concentrations", setConcSplitPane);
                 // ADD PRESET SAMPLE MIXTURES PANE
-                TitledPane addSamplePresets = new TitledPane("Add Preset Sample Mixtures", new Button("B3"));
-            sampleDefinitionMenus.getPanes().addAll(addChemsToSampleMix, setConcentrations, addSamplePresets);
+                TitledPane addPresetsTitlePane = new TitledPane("Add Preset Sample Mixtures", new Button("B3"));
+            sampleDefinitionMenus.getPanes().addAll(defineSampMixTitlePane, setConcTitlePane, addPresetsTitlePane);
 
             // Add ScrollPane and Vbox to SplitPane
             SplitPane splitPane = new SplitPane();
@@ -1706,7 +1996,7 @@ public class ChromatographySimulator extends Application {
             splitPane.getItems().addAll(sampleDefinitionMenus,finalizingButtons);
 
             // Create the Scene and add the ScrollPane to it
-            Scene scene = new Scene(splitPane, mainStage.getWidth()*0.80, mainStage.getHeight()*0.80);
+            Scene scene = new Scene(splitPane, SCREEN_BOUNDS.getWidth()*0.80, SCREEN_BOUNDS.getHeight()*0.80);
             injectStage.setScene(scene);
             injectStage.show();
         });
@@ -2356,28 +2646,16 @@ public class ChromatographySimulator extends Application {
                                     }
                                 }
 
-                                // Update the peaks shape and elution times if the oven temp is ramping or cooling, if the
-                                // column is damaged at all, or run() has been called 10 times with no updating
-                                if (MachineSettings.TEMP_RAMPING.get()
-                                        || MachineSettings.TEMP_COOLING.get()
-                                        || MachineSettings.CURRENT_COLUMN_DAMAGE > 0.0
-                                        || runCounter%10 == 0) {
-                                    for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
-                                        // Check if the peak is eluting; if it is, don't update it.
-                                        if (currentTime() >= (peak.getElutionTime()
-                                                - peak.ascendingCurve.calcWidthOfHalfCurve())) {
-                                            continue;
-                                        } else {
-                                            peak.updatePeak();
-                                        }
-                                    }
-                                    // reset runCounter, wait for another 10 run() calls
-                                    runCounter=0;
-                                }
-                                runCounter++;
-                                // After updating, make all peaks traverse the column
+                                // Update all the peaks and make them traverse the column
                                 for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
+                                    // Check if the peak is eluting; if it is, don't update it.
+                                    if (currentTime() >= (peak.getElutionTime()
+                                            - peak.ascendingCurve.calcWidthOfHalfCurve())) {
+                                        continue;
+                                    } else {
+                                        peak.updatePeak();
                                         peak.traverseColumn();
+                                    }
                                 }
 
                                 // Iterate through all the peaks and remove them if they have already eluted
@@ -2699,25 +2977,7 @@ public class ChromatographySimulator extends Application {
                         }
                     }
 
-                    // Update the peaks shape and elution times if the oven temp is ramping or cooling, if the
-                    // column is damaged at all, or run() has been called 10 times
-                    /*if (MachineSettings.TEMP_RAMPING.get()
-                            || MachineSettings.TEMP_COOLING.get()
-                            || CURRENT_COLUMN_DAMAGE > 0.0
-                            || runCounter%10 == 0) {
-                        for (Peak peak : ANALYTES_IN_COLUMN) {
-                            // Check if the peak is eluting; if it is, don't update it.
-                            if (currentTime() >= (peak.getElutionTime()
-                                    - peak.ascendingCurve.calcWidthOfHalfCurve())) {
-                                continue;
-                            } else {
-                                peak.updatePeak();
-                            }
-                        }
-                        // reset runCounter, wait for another 10 run() calls
-                        runCounter=0;
-                    }*/
-
+                    // Update all the peaks and make them traverse the column
                     for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                         // Check if the peak is eluting; if it is, don't update it.
                         if (currentTime() >= (peak.getElutionTime()
