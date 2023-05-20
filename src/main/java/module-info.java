@@ -11,7 +11,7 @@ module com.karimbouchareb.chromatographysimulator {
     requires org.kordamp.ikonli.materialdesign;
     requires org.kordamp.ikonli.fluentui;
 
-//    opens com.karimbouchareb.chromatographysimulator to javafx.fxml;
+    opens com.karimbouchareb.chromatographysimulator to javafx.base;
     exports com.karimbouchareb.chromatographysimulator to javafx.graphics;
     exports devEnv to javafx.graphics;
 }

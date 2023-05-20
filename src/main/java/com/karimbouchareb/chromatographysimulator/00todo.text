@@ -1,5 +1,15 @@
 https://ctr.fandom.com/wiki/Ring_counts_in_a_SMILES_file#:~:text=One%20way%20to%20compute%20the,the%20most%20chemically%20relevant%20rings.
 
+(ENXTXTT) Don't forget the Pareto distribution generator button in inject stage
+
+(NEXXXTTXTT) Use the LoadProgress Bar for the initializePeaks task
+
+(NEXTXXT) Redo the Auto-Zoom (don't use javaFX standard... it causes lag bad)
+
+(NEXXTXTXTXT) Dilute sample button (iterates through filteredData8 and divides all samples by the dilution factor input)
+
+(NEXTTTXTXTT) Definitely try to add Peak Convolution as a mechanism which causes PeakFronting Index to increase
+
 (NEXTT!!!) Learn to use the JavaFX Scene Builder tool which allows for WAY faster UI iteration and work. Bindings and
 event listeners and all that, I will still have to write inside my controller and application business logic. These
 can be integrated into the Scene Builder; https://www.oracle.com/java/technologies/javase/javafxscenebuilder-info.html
