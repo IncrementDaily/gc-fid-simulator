@@ -70,12 +70,12 @@ public class ChromatographySimulator extends Application {
     private static Timer simulationTimer = new Timer();
     private static AtomicInteger FRAME_LENGTH_MS = new AtomicInteger(50); // 50 milliseconds per frame
     private static final double FRAME_LENGTH_S = 0.05; // 0.05 seconds per frame
-    private static double CURRENT_TIME = 0;  // elapsedTime in seconds
+    private static double CURRENT_TIME = 0.0;  // elapsedTime in seconds
+    private static SimpleBooleanProperty isPaused = new SimpleBooleanProperty(true);
 
     // SPLASH SCREEN
     private StackPane splashScreenPane = new StackPane();
-    private ProgressBar loadProgress;
-    private Label progressText;
+
     private Stage mainStage;
 //    private Button launchButton;
     private static final Screen SCREEN = Screen.getPrimary();
@@ -138,14 +138,34 @@ public class ChromatographySimulator extends Application {
     private static void incCurrentTime(){
         CURRENT_TIME += FRAME_LENGTH_S;
     }
+    private static void restartSimulation(){
+        // Restart Peaks & Time
+        CURRENT_TIME = 0.0;
+        MachineSettings.ANALYTES_IN_COLUMN.clear();
+        // Restart Columns
+        for (Column column: Column.values()){
+            MachineSettings.columnToDamAndRem.put(column,new Double[]{0.0,1.0});
+        }
+        MachineSettings.CURRENT_COLUMN_REMAINING = 1.00;
+        MachineSettings.CURRENT_COLUMN_DAMAGE = 0.00;
+        MachineSettings.CURRENT_COLUMN = Column.SPB_OCTYL;
+        // Restart Split
+        MachineSettings.SPLIT_RATIO = 100.0;
+        // Restart oven
+        MachineSettings.OVEN_TEMPERATURE = 25;
+        MachineSettings.OVEN_TEMPERATURE_TARGET = 25;
+        // Restart Detector
+        MachineSettings.isDetectorOn.set(true);
+    }
 
     @SuppressWarnings("ReassignedVariable")
     private static void initializePeaks(List<ChemicalView> userInputs){
-        try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
+        /*try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
              CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
                      "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
                      "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
 
+            int iterations = 0;
             for (CSVRecord record : parser){
                 String chemicalNameOfInput;
                 String chemicalNameOfRecord;
@@ -198,12 +218,12 @@ public class ChromatographySimulator extends Application {
                             .peakTailingIndex(peakTailingIndex)
                             .build();
                     MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
-
                 }
+                iterations++;
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
-        }
+        }*/
     }
 
     // UI
@@ -239,9 +259,9 @@ public class ChromatographySimulator extends Application {
         private static double CURRENT_COLUMN_DAMAGE = 0.0;
         private static double CURRENT_COLUMN_REMAINING = 1.0;
         public static double INJECTION_VOLUME = 1.0; // microliters // TODO: 4/2/2023 Add Icon for "Machine Configurations" Button
-        public static double SPLIT_RATIO = 100.0; // ratio 1:50 -- 1 part of sample sent to column, 50 parts of sample vented to waste.
+        public static double SPLIT_RATIO = 100.0;
         public static SimpleDoubleProperty splitRatioProperty = new SimpleDoubleProperty(SPLIT_RATIO);
-        public static double HE_GAS_LINEAR_VELOCITY = 40.0; // Default = 40 cm/s (taken from Poole 2019 experimental conditions)
+        public static double HE_GAS_LINEAR_VELOCITY = 40.0; // TODO: 5/20/2023 Default = 40 cm/s (taken from Poole 2019 experimental conditions)
         public static double OVEN_TEMPERATURE_MIN = 25;
         public static double OVEN_TEMPERATURE_MAX = 350;
         public static double OVEN_TEMPERATURE = 25; // degrees C
@@ -250,9 +270,8 @@ public class ChromatographySimulator extends Application {
         public static AtomicBoolean TEMP_RAMPING = new AtomicBoolean();
         public static AtomicBoolean TEMP_COOLING = new AtomicBoolean();
         public static SimpleBooleanProperty isDetectorOn = new SimpleBooleanProperty(true);
-        public static boolean IS_COLUMN_CUT_POORLY = false;
-        public static double INLET_TEMPERATURE = 25; // degrees C
-        public static int MEASURED_RUNTIME = 0;
+        public static boolean IS_COLUMN_CUT_POORLY = false; // TODO: 5/20/2023  
+        public static double INLET_TEMPERATURE = 25; // degrees C // TODO: 5/20/2023  
 
         // OVEN-TEMPERATURE OPERATIONAL METHODS
         public static void nudgeOvenTempUp(){
@@ -875,6 +894,9 @@ public class ChromatographySimulator extends Application {
         }
 
     // UI-MANAGEMENT METHODS & INTERFACES
+    public interface InitCompletionHandler {
+        void complete();
+    }
     @Override
     public void init() {
         // SPLASH SCREEN OBJECTS FOR LOADING
@@ -886,6 +908,16 @@ public class ChromatographySimulator extends Application {
         title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
         title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
         title.setY(SCREEN_BOUNDS.getMinY() + SCREEN_BOUNDS.getHeight() / 2 - title.prefHeight(title.getFitWidth()) / 2);
+        FadeTransition ftTitle = new FadeTransition(Duration.millis(2500), title);
+        ftTitle.setFromValue(0.0);
+        ftTitle.setToValue(0.0);
+        ftTitle.play();
+        ftTitle.setOnFinished(e->{
+            FadeTransition ftTitle2 = new FadeTransition(Duration.millis(1000), title);
+            ftTitle2.setFromValue(0.0);
+            ftTitle2.setToValue(1.0);
+            ftTitle2.play();
+        });
         titlePane.getChildren().add(title);
         // background
         ImageView backgroundScatter = makeImageView("backgroundPopulator.gif");
@@ -904,13 +936,23 @@ public class ChromatographySimulator extends Application {
         wave.setFitHeight(title.prefHeight(title.getFitWidth())*0.65);
         wave.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - wave.getFitWidth() / 2);
         wave.setY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2) - wave.getFitHeight() / 2);
+        FadeTransition ftWave = new FadeTransition(Duration.millis(2500), wave);
+        ftWave.setFromValue(0.0);
+        ftWave.setToValue(0.0);
+        ftWave.play();
+        ftWave.setOnFinished(e->{
+            FadeTransition ftWave2 = new FadeTransition(Duration.millis(1000), wave);
+            ftWave2.setFromValue(0.0);
+            ftWave2.setToValue(1.0);
+            ftWave2.play();
+        });
         wavePane.getChildren().add(wave);
         // Travis
         Pane travisHeadPane = new Pane();
         ImageView travisHead = makeImageView("travisHead.png");
         travisHead.setPreserveRatio(true);
         travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
-        FadeTransition ftTravisHead1 = new FadeTransition(Duration.millis(3000), travisHead);
+        FadeTransition ftTravisHead1 = new FadeTransition(Duration.millis(5000), travisHead);
         ftTravisHead1.setFromValue(0.0);
         ftTravisHead1.setToValue(0.0);
         ftTravisHead1.play();
@@ -942,15 +984,7 @@ public class ChromatographySimulator extends Application {
         Pane launchPane = new Pane();
         VBox launch = new VBox();
         launch.setAlignment(Pos.CENTER);
-        loadProgress = new ProgressBar();
-        loadProgress.setStyle("-fx-accent: #ff6900");
-        loadProgress.setPrefWidth(SCREEN_BOUNDS.getWidth()*.30);
-        loadProgress.setVisible(false);
-       /* progressText = new Label("Synthesizing Chemicals . . .");
-        progressText.setAlignment(Pos.CENTER);
-        progressText.setFont(Font.font(null,FontWeight.EXTRA_BOLD,10));
-        progressText.setTextFill(Color.WHITE);
-        progressText.setVisible(false);*/
+
         Button launchButton = new Button();
         launchButton.setBackground(new Background(
                  new BackgroundFill(Color.web("#ffaf00")
@@ -960,6 +994,7 @@ public class ChromatographySimulator extends Application {
         launchIcon.setIconSize((int) (SCREEN_BOUNDS.getWidth()*0.05));
         launchIcon.setFill(Color.web("#ff6900"));
         launchButton.setGraphic(launchIcon);
+        launchButton.setPrefWidth(SCREEN_BOUNDS.getWidth()*0.10);
             launchButton.setOnMouseEntered(e->{
                 launchButton.setBackground(new Background(
                         new BackgroundFill(Color.web("#8f1b00")
@@ -983,13 +1018,23 @@ public class ChromatographySimulator extends Application {
                 fadeSplash.setToValue(0.0);
                 fadeSplash.play();
                 fadeSplash.setOnFinished(actionEvent -> {
-                    showMainStage(root);
                     launchButton.sceneProperty().get().getWindow().hide();
+                    showMainStage(root);
                 });
             });
-        launch.setLayoutX(SCREEN_BOUNDS.getMinX() + (SCREEN_BOUNDS.getWidth()/2) - loadProgress.getPrefWidth()/2);
+        FadeTransition ftLaunch = new FadeTransition(Duration.millis(2500), launchButton);
+        ftLaunch.setFromValue(0.0);
+        ftLaunch.setToValue(0.0);
+        ftLaunch.play();
+        ftLaunch.setOnFinished(e->{
+            FadeTransition ftLaunch2 = new FadeTransition(Duration.millis(1000), launchButton);
+            ftLaunch2.setFromValue(0.0);
+            ftLaunch2.setToValue(1.0);
+            ftLaunch2.play();
+        });
+        launch.setLayoutX(SCREEN_BOUNDS.getMinX() + (SCREEN_BOUNDS.getWidth()/2) - launchButton.getPrefWidth()/2);
         launch.setLayoutY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2)*1.5 - launch.getHeight() / 2);
-        launch.getChildren().addAll(loadProgress, /*progressText,*/ launchButton);
+        launch.getChildren().add(launchButton);
         launchPane.getChildren().add(launch);
 
         splashScreenPane.getChildren().addAll(backgroundScatter,travisHeadPane, wavePane, titlePane, launchPane);
@@ -1002,52 +1047,29 @@ public class ChromatographySimulator extends Application {
         mainStage.setMaximized(true);
         mainStage.show();
     }
-    /*private void showSplash(Stage initStage, Task<?> task, InitCompletionHandler initCompletionHandler
-    ) {
-        progressText.textProperty().bind(task.messageProperty());
-        loadProgress.progressProperty().bind(task.progressProperty());
-        task.stateProperty().addListener((observableValue, oldState, newState) -> {
-            if (newState == Worker.State.SUCCEEDED) {
-                loadProgress.progressProperty().unbind();
-                loadProgress.setProgress(1);
-                initStage.toFront();
-
-
-                initCompletionHandler.complete();
-            } // todo add code to gracefully handle other task states.
-        });
-
-        Scene splashScene = new Scene(splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
-        initStage.setMaximized(true);
-        initStage.setScene(splashScene);
-        initStage.initStyle(StageStyle.DECORATED);
-        initStage.setAlwaysOnTop(true);
-        initStage.show();
-    }*/
-
     private void showSplash(Stage initStage) {
         Scene splashScene = new Scene(splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
         initStage.setMaximized(true);
         initStage.setScene(splashScene);
         initStage.initStyle(StageStyle.DECORATED);
-        initStage.setAlwaysOnTop(true);
         initStage.show();
-    }
-    public interface InitCompletionHandler {
-        void complete();
     }
     @Override
     public void start(Stage initStage) {
         final Task<Void> loadingTask = new Task<Void>() {
             @Override
             protected Void call() {
-                updateMessage("Synthesizing Chemicals . . .");
+                // Task #1
+                for (Column column: Column.values()){
+                    MachineSettings.columnToDamAndRem.put(column,new Double[]{0.0,1.0});
+                }
 
+                // Task #2
                 try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
                      CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
                              "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
                              "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
-                    int iterations = 0;
+//                    int iterations = 0;
                     for (CSVRecord record : parser) {
 //                        if (iterations > 5) break;
                         if (record.getRecordNumber() == 1) continue;
@@ -1055,8 +1077,7 @@ public class ChromatographySimulator extends Application {
                         String chemicalName = record.get("chemicalName");
                         ChemicalView chemicalView = new ChemicalView(cas,chemicalName);
                         Platform.runLater(() -> obsListChemicalViews.add(chemicalView));
-                        updateProgress(iterations + 1, CHEM_DATA_SIZE);
-                        iterations++;
+//                      iterations++;
                     }
                     updateMessage("All Chemicals Synthesized");
                 } catch (IOException e) {
@@ -1067,13 +1088,11 @@ public class ChromatographySimulator extends Application {
         };
         new Thread(loadingTask).start();
 
-
         // Create a NumberAxis for the x-axis (autoranging)
         final NumberAxis xAxis = new NumberAxis(0.0,60.0,1.0);
         xAxis.setForceZeroInRange(false);
         xAxis.setLabel("Time (s)");
         xAxis.setAutoRanging(false);
-
 
         // Create a NumberAxis for the y-axis (autoranging)
         final NumberAxis yAxis = new NumberAxis(0.0,80.0,10.0);
@@ -1103,7 +1122,6 @@ public class ChromatographySimulator extends Application {
         dataSeries.getNode().setStyle("-fx-stroke-width: 1;");
         lineChart.legendVisibleProperty().set(false);
 
-
         // Define Root Layout Container, populate lineChart at center, left & right controls
         root = new BorderPane();
           BackgroundFill backgroundFill = new BackgroundFill(
@@ -1130,7 +1148,6 @@ public class ChromatographySimulator extends Application {
         simulationStateButton.setPrefWidth(140);
         simulationStateButton.setPrefHeight(45);
             // Action
-            AtomicBoolean isPaused = new AtomicBoolean(false);
             simulationStateButton.setOnAction(e -> {
                 isPaused.set(!isPaused.get());
 
@@ -1142,13 +1159,24 @@ public class ChromatographySimulator extends Application {
             });
 
         // RESTART SIMULATION BUTTON
-       /* FontIcon restart = new FontIcon(FontAwesome.PAUSE);
-        pause.setIconColor(Color.BLACK);
-        pause.setIconSize(24);
-        Button restartSimulationButton = new Button();
-        simulationStateButton.setGraphic(play);
-        simulationStateButton.setPrefWidth(140);
-        simulationStateButton.setPrefHeight(45);*/
+        Button restartButton = new Button();
+        FontIcon restartIcon = new FontIcon(FluentUiFilledAL.ARROW_HOOK_UP_LEFT_16);
+        restartIcon.setIconColor(Color.BLACK);
+        restartIcon.setIconSize(32);
+        restartButton.setGraphic(restartIcon);
+        restartButton.setPrefWidth(140);
+        restartButton.setPrefHeight(45);
+//        restartButton.disableProperty().bind(isPaused);
+        restartButton.setOnAction(e -> {
+            Alert confirmRestart = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmRestart.getDialogPane().setPrefWidth(SCREEN_BOUNDS.getWidth()*0.20);
+            confirmRestart.setHeaderText("Restart Simulation?");
+            Optional<ButtonType> choice = confirmRestart.showAndWait();
+            if (choice.get().equals(ButtonType.OK)){
+                restartSimulation();
+                dataSeries.getData().clear();
+            };
+        });
 
         // ELUTION TIME BUTTON
         Button elutionTimesButton = new Button("get ElutionTimes");
@@ -1176,8 +1204,6 @@ public class ChromatographySimulator extends Application {
             columnRem.setOnAction(e -> {
             System.out.println("Column Rem = " + MachineSettings.CURRENT_COLUMN_REMAINING);
         });
-
-
 
         // SET OVEN-TEMP BUTTON
         FontIcon thermometer0 = new FontIcon(FontAwesome.THERMOMETER_0);
@@ -1230,8 +1256,8 @@ public class ChromatographySimulator extends Application {
                 Label info = new Label("Tip: The oven temperature(s) you select for your method are of primary importance for ensuring good separation of peaks. Low temperatures cause chemicals to spend more time in the column. High temperatures speed them through. The selectivity parameters of your columns change with temperature as well. Play around!");
                 info.setWrapText(true);
                 info.setTextFill(Color.DODGERBLUE);
-                info.setFont(Font.font(null, FontPosture.ITALIC, 10));
-                info.setMaxWidth(250);
+                info.setFont(Font.font(null, FontPosture.ITALIC, 14));
+                info.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
 
                 inputDialog.getDialogPane().setContent(new VBox(2, validationLabel, currentTemp, inputField, info));
 
@@ -1307,8 +1333,8 @@ public class ChromatographySimulator extends Application {
                 Label info = new Label("Tip: A split ratio of 126 means that only 1 out of every 127 gas particles injected into the inlet actually enters the column. The other 126 are \"split off\" and vented to waste. This reduces the mass of each analyte that enters the column. This can prevent asymmetric peak shapes caused by column overloading. Also, peaks will be smaller.");
                 info.setWrapText(true);
                 info.setTextFill(Color.DODGERBLUE);
-                info.setFont(Font.font(null, FontPosture.ITALIC, 10));
-                info.setMaxWidth(270);
+                info.setFont(Font.font(null, FontPosture.ITALIC, 14));
+                info.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
 
                 inputDialog.getDialogPane().setContent(new VBox(2, validationLabel, inputField, info));
 
@@ -1456,12 +1482,13 @@ public class ChromatographySimulator extends Application {
                 });
 
                 // TIPS BUTTON
-                Button defineCustomMixTipsButton = new Button();
+                Button defineCustomMixTipsButton = new Button("Tips");
                 defineCustomMixTipsButton.setAlignment(Pos.CENTER);
                 FontIcon tip1 = new FontIcon(FontAwesome.LIGHTBULB_O);
                 tip1.setIconSize(30);
                 tip1.setIconColor(Color.DODGERBLUE);
                 defineCustomMixTipsButton.setGraphic(tip1);
+                defineCustomMixTipsButton.setFont(Font.font(null,FontWeight.EXTRA_BOLD,15));
                 defineCustomMixTipsButton.setOnAction(e->{
                     Alert defineCustomMixInfo = new Alert(Alert.AlertType.INFORMATION);
                     defineCustomMixInfo.getDialogPane().setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
@@ -1476,7 +1503,7 @@ public class ChromatographySimulator extends Application {
                     );
                     content.setWrapText(true);
                     content.setTextFill(Color.DODGERBLUE);
-                    content.setFont(Font.font(null, FontPosture.ITALIC, 12));
+                    content.setFont(Font.font(null, FontPosture.ITALIC, 14));
                     content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                     defineCustomMixInfo.getDialogPane().setContent(content);
                     defineCustomMixInfo.show();
@@ -1573,7 +1600,7 @@ public class ChromatographySimulator extends Application {
                 // CONCENTRATION COLUMN
                 TableColumn<ChemicalView, Double> concentrationColumn = new TableColumn<>("% Conc.");
                 concentrationColumn.prefWidthProperty().bind(tableViewSetConcentrations.widthProperty().multiply(0.15));
-                concentrationColumn.styleProperty().set("-fx-alignment: CENTER");
+                concentrationColumn.setStyle(" -fx-font-size: 15; -fx-font-weight: bold; -fx-alignment: CENTER");
                 concentrationColumn.setCellValueFactory(cellData -> {
                     return cellData.getValue().concentrationProperty().asObject();
                 });
@@ -1666,7 +1693,7 @@ public class ChromatographySimulator extends Application {
                             Label content = new Label("Values are % weight of 1 microliter injection");
                             content.setWrapText(true);
                             content.setTextFill(Color.DODGERBLUE);
-                            content.setFont(Font.font(null, FontPosture.ITALIC, 10));
+                            content.setFont(Font.font(null, FontPosture.ITALIC, 14));
                             content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             validationWarning.getDialogPane().setContent(content);
                             validationWarning.show();
@@ -1713,7 +1740,7 @@ public class ChromatographySimulator extends Application {
                             Label content = new Label("Values are % weight of 1 microliter injection");
                             content.setWrapText(true);
                             content.setTextFill(Color.DODGERBLUE);
-                            content.setFont(Font.font(null, FontPosture.ITALIC, 10));
+                            content.setFont(Font.font(null, FontPosture.ITALIC, 14));
                             content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             validationWarning.getDialogPane().setContent(content);
                             validationWarning.show();
@@ -1739,12 +1766,13 @@ public class ChromatographySimulator extends Application {
                 });
 
                 // TIPS BUTTON
-                Button setConcTipsButton = new Button();
+                Button setConcTipsButton = new Button("Tips");
                 setConcTipsButton.setAlignment(Pos.CENTER);
                 FontIcon tip2 = new FontIcon(FontAwesome.LIGHTBULB_O);
                 tip2.setIconSize(30);
                 tip2.setIconColor(Color.DODGERBLUE);
                 setConcTipsButton.setGraphic(tip2);
+                setConcTipsButton.setFont(Font.font(null,FontWeight.EXTRA_BOLD,15));
                 setConcTipsButton.setOnAction(e->{
                     Alert defineCustomMixInfo = new Alert(Alert.AlertType.INFORMATION);
                     defineCustomMixInfo.getDialogPane().setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
@@ -1752,12 +1780,12 @@ public class ChromatographySimulator extends Application {
                     defineCustomMixInfo.setHeaderText("Tips For Setting Concentrations");
                     Label content = new Label("(1) First, define your Sample Mixture above (otherwise, you'll see a sad little guy)"
                             + "\n(2) Set values using the buttons below"
-                            + "\n(3) Try the ESCAPE key when selecting chemicals & setting values"
+                            + "\n(3) Use the ESCAPE key to clear your current selections"
                             + "\n(4) If your peaks come out asymmetrical, consider reduced concentrations"
                     );
                     content.setWrapText(true);
                     content.setTextFill(Color.DODGERBLUE);
-                    content.setFont(Font.font(null, FontPosture.ITALIC, 12));
+                    content.setFont(Font.font(null, FontPosture.ITALIC, 14));
                     content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                     defineCustomMixInfo.getDialogPane().setContent(content);
                     defineCustomMixInfo.show();
@@ -1778,7 +1806,7 @@ public class ChromatographySimulator extends Application {
 
                 Label helperLabelConcSet = new Label ("When Finished: Click \"Finalize Sample\" on the Right");
                 helperLabelConcSet.setTextFill(Color.DODGERBLUE);
-                helperLabelConcSet.setFont(Font.font(null, FontPosture.ITALIC, 10));
+                helperLabelConcSet.setFont(Font.font(null, FontPosture.ITALIC, 14));
             // BUTTONS ROOT
             setConcButtonsVBoxRoot.getChildren().addAll(
                     setConcTipsButton,
@@ -1789,8 +1817,10 @@ public class ChromatographySimulator extends Application {
                     searchField6,
                     searchField7,
                     searchField8,
+                    createVSpacer(),
                     setValToSelectedHBox,
                     setValForAllHBox,
+                    createVSpacer(),
                     new HBox(7, removeSelectedButton, removeAllButton){
                         {setAlignment(Pos.CENTER);}
                     },
@@ -1895,6 +1925,7 @@ public class ChromatographySimulator extends Application {
             finalizeButton.setPadding(new Insets(10,50,10,50));
             BorderPane.setAlignment(finalizeButton, Pos.CENTER);
             SimpleBooleanProperty isFinalized = new SimpleBooleanProperty(finalizeButton,"isFinalized",false);
+            finalizeButton.setDisable(true);
             finalizeButton.setOnAction(e3 -> {
                 if(finalizeButton.getText().equals("Finalize Sample")){
                     finalizeButton.setText("Edit Sample");
@@ -1933,6 +1964,7 @@ public class ChromatographySimulator extends Application {
             techniqueButton.disableProperty().bind(techniqueScore.greaterThan(0.0)
                     .or(isFinalized.not()));
             finalizeButton.disableProperty().bind(techniqueScore.greaterThan(0.0)
+                            .or(concentrationInputsSum.isEqualTo(0))
                             .or(concentrationInputsSum.greaterThan(100.0)));
             Button allClearButton = new Button("All Clear: Inject");
             allClearButton.setPadding(new Insets(10,50,10,50));
@@ -1951,15 +1983,82 @@ public class ChromatographySimulator extends Application {
                 }
                 ArrayList<ChemicalView> finalUserInputs = new ArrayList<>();
                 for(ChemicalView chemical : chemicalViewsInSampleMixture){
-                        finalUserInputs.add(chemical);
+                    if (chemical.getConcentration() == 0) continue;
+                    finalUserInputs.add(chemical);
                 }
                 final Task<Void> initializePeaksTask = new Task<Void>() {
-                    @Override
                     protected Void call() {
-                        initializePeaks(finalUserInputs);
+                        try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
+                             CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
+                                     "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
+                                     "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
+
+                            int iterations = 0;
+                            for (CSVRecord record : parser){
+                                String chemicalNameOfInput;
+                                String chemicalNameOfRecord;
+                                Chemical analyte;
+                                double percentWeight;
+                                double mgAnalyteInjectedToInlet;
+                                double gAnalyteEnteringColumn;
+                                double ngAnalyteEnteringColumn;
+                                double molecularWeightAnalyte;
+                                double molesAnalyteEnteringColumn;
+                                double MRFAnalyte;
+                                double peakArea;
+                                double injectionTime;
+                                double elutionTime;
+                                double columnAdjustedOverloadMass;
+                                double peakFrontingIndex;
+                                double peakTailingIndex;
+                                if (record.getRecordNumber() == 1) continue;
+                                chemicalNameOfRecord = record.get("chemicalName");
+                                for (ChemicalView input : finalUserInputs){
+                                    chemicalNameOfInput = input.getName();
+                                    if (!chemicalNameOfRecord.equals(chemicalNameOfInput)) continue;
+                                    analyte = new Chemical(chemicalNameOfInput);
+                                    percentWeight = input.getConcentration()/100.0;
+                                    // percentWeight = %Weight of 1 uL injection (total weight assumed 1 mg / uL,
+                                    // densities NOT factored in)
+                                    mgAnalyteInjectedToInlet = percentWeight*MachineSettings.INJECTION_VOLUME;
+                                    ngAnalyteEnteringColumn = mgAnalyteInjectedToInlet*1_000_000.0 / MachineSettings.SPLIT_RATIO;
+                                    gAnalyteEnteringColumn = ngAnalyteEnteringColumn/1_000_000_000.0;
+                                    molecularWeightAnalyte = analyte.molecularWeight;
+                                    molesAnalyteEnteringColumn = (gAnalyteEnteringColumn/molecularWeightAnalyte);
+                                    MRFAnalyte = analyte.molarResponseFactor;
+
+                                    peakArea = molesAnalyteEnteringColumn*MRFAnalyte*MRF_PROPORTIONALITY_CONST;
+                                    injectionTime = currentTime();
+                                    elutionTime = injectionTime+analyte.calcRetentionTime();
+
+                                    columnAdjustedOverloadMass = analyte.adjustedOverloadMass();
+                                    peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX;
+                                    if (ngAnalyteEnteringColumn > columnAdjustedOverloadMass){
+                                        peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX +
+                                            (ngAnalyteEnteringColumn/columnAdjustedOverloadMass);
+                                    };
+                                    peakTailingIndex = Peak.IDEAL_PEAK_TAILING_INDEX;
+                                    if(MachineSettings.IS_COLUMN_CUT_POORLY){
+                                        peakTailingIndex = 2.1; // TODO: 5/3/2023 IMPLEMENT THIS WELL EVENTUALLY
+                                    }
+
+                                    Peak currentPeak = new Peak.Builder(analyte,peakArea,injectionTime)
+                                            .ascendingCurve(peakArea,elutionTime, GaussianCurve.IDEAL_PEAK_SIGMA)
+                                            .descendingCurve(peakArea,elutionTime,GaussianCurve.IDEAL_PEAK_SIGMA)
+                                            .peakFrontingIndex(peakFrontingIndex)
+                                            .peakTailingIndex(peakTailingIndex)
+                                            .build();
+                                    MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
+                                }
+                                iterations++;
+                                updateProgress(iterations, finalUserInputs.size());
+                            }
+                        } catch (IOException e) {
+                            throw new RuntimeException("Bro, your csv datafile is messed up", e);
+                        }
+
                         for (ChemicalView chemView : chemicalViewsInSampleMixture){
                             chemView.setConcentration(0.0);
-
                         }
                         return null;
                     }
@@ -1971,13 +2070,29 @@ public class ChromatographySimulator extends Application {
                 initializePeaksTask.setOnRunning(e -> {
                     Platform.runLater(() -> {
                         injectStage.close();
+                        // Overlay greys out mainstage
+                        StackPane overlayPane = new StackPane();
+                        overlayPane.setStyle("-fx-background-color: rgba(0, 0, 0, 0.3);"); // Adjust the opacity as needed
+                        overlayPane.setPrefSize(mainStage.getWidth(), mainStage.getHeight());
+                        overlayPane.setMouseTransparent(true);
+                        // Loading animation
                         ImageView loadingPeaks = makeImageView("peaksLoading.gif");
-                        loadingPeaks.fitWidthProperty().set(SCREEN_BOUNDS.getWidth()*0.20);
                         loadingPeaks.setPreserveRatio(true);
-                        StackPane loadingPeaksPane = new StackPane();
-                        loadingPeaksPane.setBackground(Background.EMPTY);
-                        loadingPeaksPane.getChildren().addAll(loadingPeaks);
-                        Scene loadingScene = new Scene(loadingPeaksPane);
+                        loadingPeaks.fitWidthProperty().set(SCREEN_BOUNDS.getWidth()*0.18);
+                        // Loading progress bar
+                        ProgressBar initPeaksLoadingBar = new ProgressBar();
+                            initPeaksLoadingBar.setStyle("-fx-accent: #ffaf00");
+                            initPeaksLoadingBar.setVisible(true);
+                            initPeaksLoadingBar.setPrefWidth(SCREEN_BOUNDS.getWidth()*0.16);
+                            initPeaksLoadingBar.progressProperty().bind(initializePeaksTask.progressProperty());
+                        // VBox contains progress bar and loading animation
+                        VBox column = new VBox(2,loadingPeaks,initPeaksLoadingBar);
+                            column.setAlignment(Pos.CENTER);
+                        // Root of loadingStage
+                        StackPane loadingStackPane = new StackPane();
+                           loadingStackPane.getChildren().addAll(overlayPane, column);
+                           loadingStackPane.setBackground(Background.EMPTY);
+                        Scene loadingScene = new Scene(loadingStackPane);
                         loadingScene.setFill(Color.TRANSPARENT);
                         loadingStage.setScene(loadingScene);
                         loadingStage.show();
@@ -2020,7 +2135,7 @@ public class ChromatographySimulator extends Application {
         fire.setIconColor(Color.DODGERBLUE);
         fire.setIconSize(24);
         Label fid = new Label("FID");
-        fid.setFont(Font.font(null,FontWeight.BOLD,10));
+        fid.setFont(Font.font(null,FontWeight.BOLD,11));
         HBox fidDetector = new HBox(fid,fire);
         fidDetector.setAlignment(Pos.CENTER);
         detectorOnOffButton.setGraphic(fidDetector);
@@ -2123,7 +2238,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         db1701Info.getDialogPane().setContent(selectivityInfo);
@@ -2176,7 +2291,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         db225Info.getDialogPane().setContent(selectivityInfo);
@@ -2230,7 +2345,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         hp5Info.getDialogPane().setContent(selectivityInfo);
@@ -2283,7 +2398,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         rxi17Info.getDialogPane().setContent(selectivityInfo);
@@ -2337,7 +2452,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         rxi5SilInfo.getDialogPane().setContent(selectivityInfo);
@@ -2391,7 +2506,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         hpInnowaxInfo.getDialogPane().setContent(selectivityInfo);
@@ -2444,7 +2559,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         rtxOPPInfo.getDialogPane().setContent(selectivityInfo);
@@ -2498,7 +2613,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         rtx440Info.getDialogPane().setContent(selectivityInfo);
@@ -2551,7 +2666,7 @@ public class ChromatographySimulator extends Application {
                             lserConstantInfo.setWrapText(true);
                             lserConstantInfo.setTextFill(Color.DODGERBLUE);
                             lserConstantInfo.setFont(Font.font(null, FontWeight.BOLD,11));
-                            lserConstantInfo.setMaxWidth(400);
+                            lserConstantInfo.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
                             lserConstantInfo.setAlignment(Pos.CENTER);
                         }
                         spbOctylInfo.getDialogPane().setContent(selectivityInfo);
@@ -2572,16 +2687,16 @@ public class ChromatographySimulator extends Application {
                     }
 
                     // Warning message
-                    Label warningMessage1 = new Label("Error: FID Detector is Active");
+                    Label warningMessage1 = new Label("Error: FID Detector Active (Turn it off using the FID Button)");
                     warningMessage1.setTextFill(Color.RED);
-                    warningMessage1.setFont(Font.font(null,FontWeight.BOLD,10));
+                    warningMessage1.setFont(Font.font(null,FontWeight.BOLD,12));
                     warningMessage1.visibleProperty().bind(MachineSettings.isDetectorOn);
                     Label warningMessage2 = new Label("Error: Oven Temperature >= 40 degrees C");
                     warningMessage2.setTextFill(Color.RED);
-                    warningMessage2.setFont(Font.font(null,FontWeight.BOLD,10));
+                    warningMessage2.setFont(Font.font(null,FontWeight.BOLD,12));
                     warningMessage2.visibleProperty().bind(MachineSettings.ovenTempProperty.greaterThan(40.0));
                     Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it.");
-                    columnWarning.setFont(Font.font(null, FontPosture.ITALIC,10));
+                    columnWarning.setFont(Font.font(null, FontPosture.ITALIC,12));
                     columnWarning.setTextFill(Color.DODGERBLUE);
                     columnWarning.setWrapText(true);
                     columnWarning.setMaxWidth(250);
@@ -2591,10 +2706,16 @@ public class ChromatographySimulator extends Application {
 
                 Optional<Column> result = columnChoices.showAndWait();
                 if (result.isPresent()) {
+                    MachineSettings.columnToDamAndRem.put(MachineSettings.CURRENT_COLUMN,
+                            new Double[]{MachineSettings.CURRENT_COLUMN_DAMAGE,
+                                    MachineSettings.CURRENT_COLUMN_REMAINING});
                     MachineSettings.CURRENT_COLUMN = result.get();
+                    MachineSettings.CURRENT_COLUMN_DAMAGE
+                            = MachineSettings.columnToDamAndRem.get(MachineSettings.CURRENT_COLUMN)[0];
+                    MachineSettings.CURRENT_COLUMN_REMAINING
+                            = MachineSettings.columnToDamAndRem.get(MachineSettings.CURRENT_COLUMN)[1];
                     columnName.setText(MachineSettings.CURRENT_COLUMN.toString());
                 }
-            /*}*/
         });
 
 
@@ -2757,14 +2878,14 @@ public class ChromatographySimulator extends Application {
         clickAndDragZoomButton.setGraphic(clickAndDragZoomGraphic);
         clickAndDragZoomButton.setOnAction(e->{
             Alert zoomInfo = new Alert(Alert.AlertType.INFORMATION);
-            zoomInfo.getDialogPane().setMaxWidth(350);
+            zoomInfo.getDialogPane().setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
             zoomInfo.setTitle("Click-n-Drag Zoom");
             zoomInfo.setHeaderText("Examine peaks closely!");
             Label content = new Label("Tip: To see closeup(s) of peak(s), HOLD CTRL + CLICK & DRAG to draw a zooming rectangle. Examine peaks for asymmetry and overlapping with other peaks. This is especially important when your sample mixture contains dozens or hundreds of analytes!");
             content.setWrapText(true);
             content.setTextFill(Color.DODGERBLUE);
-            content.setFont(Font.font(null, FontPosture.ITALIC, 10));
-            content.setMaxWidth(250);
+            content.setFont(Font.font(null, FontPosture.ITALIC, 14));
+            content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
             zoomInfo.getDialogPane().setContent(content);
             zoomInfo.show();
         });
@@ -2920,10 +3041,11 @@ public class ChromatographySimulator extends Application {
         leftControls.getChildren().add(splitRatioButton);
         leftControls.getChildren().add(injectButton);
         leftControls.getChildren().add(simulationStateButton);
+        leftControls.getChildren().add(restartButton);
         leftControls.getChildren().add(createVSpacer());
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
         leftControls.getChildren().add(elutionTimesButton);
-        leftControls.getChildren().add(utilityButton);
+//        leftControls.getChildren().add(utilityButton);
         leftControls.setAlignment(Pos.CENTER);
 
         // Create main scene and show main stage
