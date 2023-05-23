@@ -13,5 +13,4 @@ module com.karimbouchareb.chromatographysimulator {
 
     opens com.karimbouchareb.chromatographysimulator to javafx.base;
     exports com.karimbouchareb.chromatographysimulator to javafx.graphics;
-    exports devEnv to javafx.graphics;
 }
