@@ -248,7 +248,6 @@ public class ChromatographySimulator extends Application {
     protected static class MachineSettings{
         // PEAK & COLUMN FIELDS
         private static TreeSet<Peak> ANALYTES_IN_COLUMN = new TreeSet<>();
-        private static HashSet<Peak> ANALYTES_IN_COLUMN2 = new HashSet<>();
         private static Column CURRENT_COLUMN = Column.SPB_OCTYL;
         private static HashMap<Column, Double[]> columnToDamAndRem = new HashMap<>();
         private static double CURRENT_COLUMN_DAMAGE = 0.0;
@@ -571,19 +570,16 @@ public class ChromatographySimulator extends Application {
         private double a;
         private double l;
 
-        private static class Builder{
-            private String casNumber;
-            private String chemicalName;
-            private double molarResponseFactor;
-            private double molecularWeight;
-            private double overloadMass_1;
-            private double e;
-            private double s;
-            private double a;
-            private double l;
-
-            public Builder() {
-            }
+        /*private static class Builder{
+            private String casNumber = "-1";
+            private String chemicalName = "-1";
+            private double molarResponseFactor = -1;
+            private double molecularWeight = -1;
+            private double overloadMass_1 = -1;
+            private double e = -1;
+            private double s = -1;
+            private double a = -1;
+            private double l = -1;
 
             public Builder casNumber(String casNumber)
             {this.casNumber = casNumber;                            return this;}
@@ -594,7 +590,7 @@ public class ChromatographySimulator extends Application {
             public Builder molecularWeight(double molecularWeight)
             {this.molecularWeight = molecularWeight;                return this;}
             public Builder overloadMass_1(double overloadMass_1)
-            {this.overloadMass_1 = Builder.this.overloadMass_1;     return this;}
+            {this.overloadMass_1 = overloadMass_1;                  return this;}
             public Builder e(double e)
             {this.e = e;                                            return this;}
             public Builder s(double s)
@@ -604,10 +600,10 @@ public class ChromatographySimulator extends Application {
             public Builder l(double l)
             {this.l = l;                                            return this;}
 
-            public Chemical build(){
+            public Chemical build() {
                 return new Chemical(this);
             }
-        }
+        }*/
 
         public Chemical(String chemicalName) {
             this.chemicalName = chemicalName;
@@ -619,7 +615,8 @@ public class ChromatographySimulator extends Application {
                 for (CSVRecord record : parser) {
                     if (record.getRecordNumber() == 1) continue;
                     if (record.get(1).equals(chemicalName)){
-                        this.chemicalName = record.get(1);
+                        this.casNumber = record.get("CAS");
+                        this.chemicalName = record.get("chemicalName");
                         this.molarResponseFactor = Double.parseDouble(record.get("MRF"));
                         this.molecularWeight = Double.parseDouble(record.get("molecularWeight"));
                         this.overloadMass_1 = Double.parseDouble(record.get("overloadMass_1"));
@@ -634,18 +631,49 @@ public class ChromatographySimulator extends Application {
                 e.printStackTrace();
             }
         }
-        private Chemical(Chemical.Builder builder){
-            this.casNumber = builder.casNumber;
-            this.chemicalName = builder.chemicalName;
-            this.molarResponseFactor = builder.molarResponseFactor;
-            this.molecularWeight = builder.molecularWeight;
-            this.overloadMass_1 = builder.overloadMass_1;
-            this.e = builder.e;
-            this.s = builder.s;
-            this.a = builder.a;
-            this.l = builder.l;
+        public Chemical(String casNumber,
+                        String chemicalName,
+                        double molarResponseFactor,
+                        double molecularWeight,
+                        double overloadMass_1,
+                        double e,
+                        double s,
+                        double a,
+                        double l) {
+            this.casNumber = casNumber;
+            this.chemicalName = chemicalName;
+            this.molarResponseFactor = molarResponseFactor;
+            this.molecularWeight = molecularWeight;
+            this.overloadMass_1 = overloadMass_1;
+            this.e = e;
+            this.s = s;
+            this.a = a;
+            this.l = l;
         }
-        private Chemical(int negativeOneChem){
+
+        /*public Chemical(Chemical.Builder builder){
+                    // Sanity check builder
+                    if (builder.casNumber.equals("-1")
+                    || builder.chemicalName.equals("-1")
+                    || builder.molarResponseFactor == -1
+                    || builder.molecularWeight == -1
+                    || builder.overloadMass_1 == -1
+                    || builder.e == -1
+                    || builder.s == -1
+                    || builder.a == -1
+                    || builder.l == -1
+                    ) throw new IllegalStateException("Chemical Builder: one or more params not set");
+                    this.casNumber = builder.casNumber;
+                    this.chemicalName = builder.chemicalName;
+                    this.molarResponseFactor = builder.molarResponseFactor;
+                    this.molecularWeight = builder.molecularWeight;
+                    this.overloadMass_1 = builder.overloadMass_1;
+                    this.e = builder.e;
+                    this.s = builder.s;
+                    this.a = builder.a;
+                    this.l = builder.l;
+                }*/
+        private Chemical(int negativeOne){
             try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
                  CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
                          "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
@@ -670,9 +698,9 @@ public class ChromatographySimulator extends Application {
         private static Chemical nullChem(){
             return new Chemical (-1);
         }
-        public static Chemical.Builder builder(){
+        /*public static Chemical.Builder builder(){
             return new Chemical.Builder();
-        }
+        }*/
         private double calcRetentionFactor(){
             double logk = e* MachineSettings.CURRENT_COLUMN.E(MachineSettings.OVEN_TEMPERATURE)
                     + s* MachineSettings.CURRENT_COLUMN.S(MachineSettings.OVEN_TEMPERATURE)
@@ -695,7 +723,26 @@ public class ChromatographySimulator extends Application {
             else if (MachineSettings.CURRENT_COLUMN.filmThickness >= 0.25) return overloadMass_1/4;
             else return overloadMass_1/8;
         }
-
+        private double molecularWeight(){
+            return molecularWeight;
+        }
+        private double molarResponseFactor(){
+            return molarResponseFactor;
+        }
+        @Override
+        public boolean equals(Object o){
+            if (this == o) return true;
+            if (!(o instanceof Chemical)) return false;
+            Chemical otherChem = (Chemical) o;
+            return this.chemicalName.equals(otherChem.chemicalName)
+                    || this.casNumber.equals(otherChem.casNumber);
+        }
+        @Override
+        public int hashCode(){
+            int result = chemicalName.hashCode();
+            result = 31 * result + casNumber.hashCode();
+            return result;
+        }
         @Override
     	public String toString(){
     		return chemicalName;
@@ -745,7 +792,7 @@ public class ChromatographySimulator extends Application {
             if (!(o instanceof ChemicalView)) return false;
             ChemicalView cV = (ChemicalView) o;
             return getName().equals(cV.getName())
-                    || getCas().equals(cV.getCas())
+                    && getCas().equals(cV.getCas())
                     && getConcentration().equals(cV.getConcentration());
         }
         @Override
@@ -1199,16 +1246,26 @@ public class ChromatographySimulator extends Application {
                         a = Double.parseDouble(record.get("A"));
                         l = Double.parseDouble(record.get("L"));
 
-                        Chemical chemical = Chemical.builder()
+                        /*Chemical chemical = Chemical.builder()
                                 .casNumber(casNumber)
                                 .chemicalName(chemicalName)
                                 .molarResponseFactor(molarResponseFactor)
+                                .molecularWeight(molecularWeight)
                                 .overloadMass_1(overloadMass_1)
                                 .e(e)
                                 .s(s)
                                 .a(a)
                                 .l(l)
-                                .build();
+                                .build();*/
+                        Chemical chemical = new Chemical(casNumber,
+                                chemicalName,
+                                molarResponseFactor,
+                                molecularWeight,
+                                overloadMass_1,
+                                e,
+                                s,
+                                a,
+                                l);
                         casToChemical.put(casNumber, chemical);
                     }
                 } catch (IOException e) {
@@ -1318,11 +1375,6 @@ public class ChromatographySimulator extends Application {
                 System.out.print(String.format("%.1f", peak.getElutionTime()) + " eTime");
                 System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
             }
-                System.out.println("MachineSettings.ANALYTES_IN_COLUMN.size() = " + MachineSettings.ANALYTES_IN_COLUMN.size());
-                System.out.println("MachineSettings.ANALYTES_IN_COLUMN2.size() = " + MachineSettings.ANALYTES_IN_COLUMN2.size());
-                MachineSettings.ANALYTES_IN_COLUMN2.removeAll(MachineSettings.ANALYTES_IN_COLUMN);
-                System.out.println(MachineSettings.ANALYTES_IN_COLUMN2);
-                System.out.println();
         });
 
         // ColumnDamage Button
@@ -1779,9 +1831,7 @@ public class ChromatographySimulator extends Application {
                             .getSelectionModel()
                             .getSelectedItems().size());
                     chemicalViewsInSampleMixture.setAll(chemicalViewsInSampleMixture.stream().distinct().collect(Collectors.toList()));
-                    System.out.println("size after stream = " + chemicalViewsInSampleMixture.size());
                     tableViewSetConcentrations.setItems(filteredData8);
-                    System.out.println("filteredData8.size() = " + filteredData8.size());
                     rtHelperLabel.play();
                 });
                 defineCustomMixtureButtonsRoot.getChildren().addAll(addSelectedChemsButton, helperLabelAddSel, createVSpacer());
@@ -2151,16 +2201,18 @@ public class ChromatographySimulator extends Application {
                                 double columnAdjustedOverloadMass;
                                 double peakFrontingIndex;
                                 double peakTailingIndex;
+                                // Skip first row
                                 if (record.getRecordNumber() == 1) continue;
                                 chemicalNameOfRecord = record.get("chemicalName");
+
                                 for (ChemicalView input : finalUserInputs){
                                     chemicalNameOfInput = input.getName();
+                                    String casNumber = input.getCas();
                                     if (!chemicalNameOfRecord.equals(chemicalNameOfInput)) continue;
 
                                     // Construct analyte if it is not found in casToChemical top level hashmap
-//                                    analyte = new Chemical(chemicalNameOfInput);
-                                    if (casToChemical.containsKey(input.getCas())){
-                                        analyte = casToChemical.get(input.getCas());
+                                    if (casToChemical.containsKey(casNumber)){
+                                        analyte = casToChemical.get(casNumber);
                                     }else{
                                         analyte = new Chemical(chemicalNameOfInput);
                                     }
@@ -2171,9 +2223,9 @@ public class ChromatographySimulator extends Application {
                                     mgAnalyteInjectedToInlet = percentWeight*MachineSettings.INJECTION_VOLUME;
                                     ngAnalyteEnteringColumn = mgAnalyteInjectedToInlet*1_000_000.0 / MachineSettings.SPLIT_RATIO;
                                     gAnalyteEnteringColumn = ngAnalyteEnteringColumn/1_000_000_000.0;
-                                    molecularWeightAnalyte = analyte.molecularWeight;
+                                    molecularWeightAnalyte = analyte.molecularWeight();
                                     molesAnalyteEnteringColumn = (gAnalyteEnteringColumn/molecularWeightAnalyte);
-                                    MRFAnalyte = analyte.molarResponseFactor;
+                                    MRFAnalyte = analyte.molarResponseFactor();
 
                                     peakArea = molesAnalyteEnteringColumn*MRFAnalyte*MRF_PROPORTIONALITY_CONST;
                                     injectionTime = currentTime();
@@ -2196,17 +2248,16 @@ public class ChromatographySimulator extends Application {
                                             .peakFrontingIndex(peakFrontingIndex)
                                             .peakTailingIndex(peakTailingIndex)
                                             .build();
-                                    MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
-                                    MachineSettings.ANALYTES_IN_COLUMN2.add(currentPeak);
+                                        MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
                                 }
                                 iterations++;
                                 updateProgress(iterations, finalUserInputs.size());
                             }
-                            System.out.println("iterations = " + iterations);
                         } catch (IOException e) {
                             throw new RuntimeException("Bro, your csv datafile is messed up", e);
                         }
 
+                        // After injection complete, reset all conc to 0
                         for (ChemicalView chemView : chemicalViewsInSampleMixture){
                             chemView.setConcentration(0.0);
                         }
@@ -2214,6 +2265,8 @@ public class ChromatographySimulator extends Application {
                     }
                 };
                 new Thread(initializePeaksTask).start();
+
+                // If initializePeaksTask takes a long time, loadingStage will be seen by viewer for a short while
                 Stage loadingStage = new Stage(StageStyle.TRANSPARENT);
                 loadingStage.initOwner(mainStage);
                 loadingStage.initModality(Modality.APPLICATION_MODAL);
@@ -3159,6 +3212,7 @@ public class ChromatographySimulator extends Application {
         // UTILITY BUTTON
         Button utilityButton = new Button("utility");
         utilityButton.setOnAction(e->{
+            /*System.out.println("casToChemical.size() = " + casToChemical.size());*/
            /* Runtime runtime = Runtime.getRuntime();
             long usedMemory = runtime.totalMemory() - runtime.freeMemory();
             long maxMemory = runtime.maxMemory();
@@ -3195,7 +3249,7 @@ public class ChromatographySimulator extends Application {
         leftControls.getChildren().add(createVSpacer());
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
         leftControls.getChildren().add(elutionTimesButton);
-//        leftControls.getChildren().add(utilityButton);
+        leftControls.getChildren().add(utilityButton);
         leftControls.setAlignment(Pos.CENTER);
 
         showSplash(initStage);
