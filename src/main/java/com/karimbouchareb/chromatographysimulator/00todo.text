@@ -1,5 +1,9 @@
 https://ctr.fandom.com/wiki/Ring_counts_in_a_SMILES_file#:~:text=One%20way%20to%20compute%20the,the%20most%20chemically%20relevant%20rings.
 
+(NEXTNXNXTNXTXNT) BUGS PILING UP:
+            (1) The RetentionTime bugs for ~300 Chemicals/Peaks
+            (2) The issues with initializing the solute bands and representing them
+
 (ENXTXTT) Don't forget the Pareto distribution generator button in inject stage
 
 (NEXXXTTXTT) Use the LoadProgress Bar for the initializePeaks task

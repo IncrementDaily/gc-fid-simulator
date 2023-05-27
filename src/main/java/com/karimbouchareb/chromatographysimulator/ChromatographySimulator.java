@@ -6,6 +6,8 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.*;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -77,10 +79,12 @@ public class ChromatographySimulator extends Application {
     // SPLASH SCREEN
     private StackPane splashScreenPane = new StackPane();
 
+    // MAIN SCREEN
     private Stage mainStage;
-//    private Button launchButton;
     private static final Screen SCREEN = Screen.getPrimary();
     private static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
+    private static LineChart<Number, Number> lineChartSolBand;
+    private static List<ChangeListener> colTravListeners = FXCollections.observableArrayList();
 
     // MAIN SCENE
     private static Scene mainScene;
@@ -133,13 +137,17 @@ public class ChromatographySimulator extends Application {
         CURRENT_TIME += FRAME_LENGTH_S;
     }
     private static void restartSimulation(){
-        // Restart Peaks & Time
+        // Restart Peaks & Time (including removal of listener pointers for columnTraversal properties)
         CURRENT_TIME = 0.0;
+        colTravListeners.clear();
         MachineSettings.ANALYTES_IN_COLUMN.clear();
+        lineChartSolBand.getData().clear();
+
         // Restart Columns
-        for (Column column: Column.values()){
+        for (Column column : Column.values()){
             MachineSettings.columnToDamAndRem.put(column,new Double[]{0.0,1.0});
         }
+
         MachineSettings.CURRENT_COLUMN_REMAINING = 1.00;
         MachineSettings.CURRENT_COLUMN_DAMAGE = 0.00;
         MachineSettings.CURRENT_COLUMN = Column.SPB_OCTYL;
@@ -264,7 +272,7 @@ public class ChromatographySimulator extends Application {
         public static AtomicBoolean TEMP_RAMPING = new AtomicBoolean();
         public static AtomicBoolean TEMP_COOLING = new AtomicBoolean();
         public static SimpleBooleanProperty isDetectorOn = new SimpleBooleanProperty(true);
-        public static boolean IS_COLUMN_CUT_POORLY = false; // TODO: 5/20/2023  
+        public static boolean IS_COLUMN_CUT_POORLY = false; // TODO: 5/20/2023
         public static double INLET_TEMPERATURE = 25; // degrees C // TODO: 5/20/2023  
 
         // OVEN-TEMPERATURE OPERATIONAL METHODS
@@ -743,9 +751,37 @@ public class ChromatographySimulator extends Application {
             result = 31 * result + casNumber.hashCode();
             return result;
         }
-        @Override
+        /*@Override
     	public String toString(){
     		return chemicalName;
+        }*/
+
+        @Override
+        public String toString(){
+            return new StringBuilder()
+                    .append(chemicalName)
+                    .append("\n")
+                    .append("[")
+                    .append(e)
+                    .append(" ")
+                    .append(s)
+                    .append(" ")
+                    .append(a)
+                    .append(" ")
+                    .append(l)
+                    .append("]")
+                    .append("\n")
+                    .append("{")
+                    .append("MW=" + molecularWeight + " ")
+                    .append("MRF=" + molarResponseFactor + " ")
+                    .append("OLM=" + overloadMass_1)
+                    .append("}")
+                    .append("\n")
+                    .append("RT=" + calcRetentionTime())
+                    .append("\n")
+                    .append("RF=" + calcRetentionFactor())
+                    .append("\n")
+                    .toString();
         }
     }
     private static class ChemicalView implements Comparable<ChemicalView> {
@@ -817,6 +853,7 @@ public class ChromatographySimulator extends Application {
         private final double peakArea;
         private final double injectionTime;
         private double proportionOfColumnTraversed = 0.0; // Range from 0.0 to 1.0;
+        private SimpleDoubleProperty columnTraversedProperty = new SimpleDoubleProperty(0.0);
         private AtomicBoolean isEluting = new AtomicBoolean(false);
         private double elutionTime;
         private GaussianCurve ascendingCurve;
@@ -878,6 +915,19 @@ public class ChromatographySimulator extends Application {
             elutionTime = builder.analyte.calcRetentionTime() + injectionTime;
         }
 
+
+        public double getColumnTraversed() {
+            return columnTraversedProperty.get();
+        }
+
+        public DoubleProperty columnTraversedProperty() {
+            return columnTraversedProperty;
+        }
+
+        public void setColumnTraversed(double proportionOfColumnTraversed) {
+            this.columnTraversedProperty.set(proportionOfColumnTraversed);
+        }
+
         // Math.max() method ensures that the updated retentionTime will not be LESS than currentTime()
         // otherwise the peak would not plot correctly. The updated retentionTime will be 3 frames after the currentTime().
         private void updatePeak(){
@@ -893,16 +943,17 @@ public class ChromatographySimulator extends Application {
             }
             proportionOfColumnTraversed = Math.min(proportionOfColumnTraversed
                     + traversalProgressPerSimulationStep() , 1.0);
+            columnTraversedProperty.set(proportionOfColumnTraversed*100);
             if (proportionOfColumnTraversed == 1.0) isEluting.set(true);
         }
         private double traversalProgressPerSimulationStep(){
             return FRAME_LENGTH_S/analyte.calcRetentionTime();
         }
-        private double proportionOfColumnUntraversed(){
-            return 1.0 - proportionOfColumnTraversed();
-        }
         private double proportionOfColumnTraversed(){
             return proportionOfColumnTraversed;
+        }
+        private double proportionOfColumnUntraversed(){
+            return 1.0 - proportionOfColumnTraversed();
         }
         private int simulationStepsRemainingUntilPeakElutes(){
             return (int) Math.ceil(proportionOfColumnUntraversed()
@@ -968,6 +1019,13 @@ public class ChromatographySimulator extends Application {
             int result = analyte.hashCode();
             result = 31 * result + Double.hashCode(injectionTime);
             return result;
+        }
+
+        private String colorHash(){
+            String colorHash = new StringBuilder()
+                    .append("")
+                    .toString();
+            return colorHash;
         }
 
         public String toString(){
@@ -1276,17 +1334,18 @@ public class ChromatographySimulator extends Application {
         };
         new Thread(chemicalLoadingTask).start();
 
-        // Create a NumberAxis for the x-axis (autoranging)
-        final NumberAxis xAxis = new NumberAxis(0.0,60.0,1.0);
-        xAxis.setForceZeroInRange(false);
-        xAxis.setLabel("Time (s)");
-        xAxis.setAutoRanging(false);
+    // DETECTOR LINE CHART
+        // XAxis -- Detector Line Chart
+        final NumberAxis xAxisDetector = new NumberAxis(0.0,100.0,10.0);
+        xAxisDetector.setForceZeroInRange(false);
+        xAxisDetector.setLabel("Time (s)");
+        xAxisDetector.setAutoRanging(false);
 
-        // Create a NumberAxis for the y-axis (autoranging)
-        final NumberAxis yAxis = new NumberAxis(0.0,80.0,10.0);
-        yAxis.setLabel("Signal (Peak Area Units)");
-        yAxis.setAutoRanging(false);
-        yAxis.setTickLabelFormatter(new StringConverter<Number>() {
+        // YAxis -- Detector Line Chart
+        final NumberAxis yAxisDetector = new NumberAxis(0.0,100.0,10.0);
+        yAxisDetector.setLabel("Signal (Peak Area Units)");
+        yAxisDetector.setAutoRanging(false);
+        yAxisDetector.setTickLabelFormatter(new StringConverter<Number>() {
             @Override
             public String toString(Number object) {
                 return String.format("%.0f", object.doubleValue());
@@ -1298,19 +1357,50 @@ public class ChromatographySimulator extends Application {
             }
         });
 
-        // Create a LineChart and don't create symbols
-        final LineChart<Number, Number> lineChart = new LineChart<>(xAxis, yAxis);
-        lineChart.setCreateSymbols(false);
-        lineChart.setAnimated(false);
-        lineChart.setPadding(new Insets(40,30,0,0));
+        // LineChart -- Detector Line Chart
+        final LineChart<Number, Number> lineChartDetector = new LineChart<>(xAxisDetector, yAxisDetector);
+        lineChartDetector.setCreateSymbols(false);
+        lineChartDetector.setAnimated(false);
+        lineChartDetector.legendVisibleProperty().set(false);
+        lineChartDetector.setCenterShape(true);
+        lineChartDetector.setPadding(new Insets(20,40,10,0));
+        lineChartDetector.setPrefHeight(SCREEN_BOUNDS.getHeight()*0.75);
 
-        // Create a data series and add to lineChart
-        XYChart.Series<Number, Number> dataSeries = new XYChart.Series<>();
-        lineChart.getData().add(dataSeries);
-        dataSeries.getNode().setStyle("-fx-stroke-width: 1;");
-        lineChart.legendVisibleProperty().set(false);
+        // DataSeries -- Detector Line Chart
+        XYChart.Series<Number, Number> dataSeriesDetector = new XYChart.Series<>();
+        lineChartDetector.getData().add(dataSeriesDetector);
+        dataSeriesDetector.getNode().setStyle("-fx-stroke-width: 1; -fx-stroke: #1E90FF;");
 
-        // Define Root Layout Container, populate lineChart at center, left & right controls
+    // SOLUTE BANDS TRAVERSAL LINE CHART
+        // XAxis -- Solute Bands Traversal Line Chart
+        final NumberAxis xAxisSolBand = new NumberAxis(0.0,100,10);
+//        xAxisSolBand.setLabel("Column Length Traversed (%)");
+
+        // YAxis -- Solute Bands Traversal Line Chart
+        final NumberAxis yAxisSolBand = new NumberAxis(0.0,1,0);
+        yAxisSolBand.setVisible(false);
+        yAxisSolBand.setTickLabelsVisible(false);
+
+        // Line Chart -- Solute Bands Traversal Line Chart
+        lineChartSolBand = new LineChart<>(xAxisSolBand,yAxisSolBand);
+        lineChartSolBand.applyCss();
+        Node chartBackground = lineChartSolBand.lookup(".chart-plot-background");
+        chartBackground.setStyle("-fx-background-color: #1e8fff20;");
+        lineChartSolBand.setCreateSymbols(false);
+        lineChartSolBand.setAnimated(false);
+        lineChartSolBand.legendVisibleProperty().set(false);
+        lineChartSolBand.setVerticalGridLinesVisible(false);
+        lineChartSolBand.setPadding(new Insets(0,40,0,0));
+        lineChartSolBand.setPrefHeight(SCREEN_BOUNDS.getHeight()*0.15);
+        lineChartSolBand.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.65);
+
+        // Data Series -- Solute Bands Traversal Line Chart
+        XYChart.Series<Number, Number> dataSeriesSolBand = new XYChart.Series<>();
+        lineChartSolBand.getData().add(dataSeriesSolBand);
+//        dataSeriesSolBand.getNode().setStyle("-fx-stroke-width: 1; -fx-stroke: #1E90FF;");
+
+
+        // ROOT BORDERPANE
         root = new BorderPane();
           BackgroundFill backgroundFill = new BackgroundFill(
             Color.FLORALWHITE,
@@ -1319,9 +1409,9 @@ public class ChromatographySimulator extends Application {
         root.setBackground(new Background(backgroundFill));
 
         VBox leftControls = new VBox(10);
-          leftControls.setPadding(new Insets(10,20,10,20));
+          leftControls.setPadding(new Insets(10,20,10,30));
         leftControls.setAlignment(Pos.CENTER);
-        root.setCenter(lineChart);
+        root.setCenter(lineChartDetector);
         root.setLeft(leftControls);
 
         // PAUSE/PLAY BUTTON
@@ -1362,19 +1452,23 @@ public class ChromatographySimulator extends Application {
             Optional<ButtonType> choice = confirmRestart.showAndWait();
             if (choice.get().equals(ButtonType.OK)){
                 restartSimulation();
-                dataSeries.getData().clear();
+                dataSeriesDetector.getData().clear();
             };
         });
 
-        // ELUTION TIME BUTTON
+        // ELUTION TIMES BUTTON
         Button elutionTimesButton = new Button("get ElutionTimes");
             // Action
             elutionTimesButton.setOnAction(e -> {
             for(Peak peak : MachineSettings.ANALYTES_IN_COLUMN){
                 System.out.print(peak.analyte.toString() + " ");
                 System.out.print(String.format("%.1f", peak.getElutionTime()) + " eTime");
-                System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
+                System.out.println();
+                System.out.println();
+//              System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
             }
+                System.out.println("SIZE = " + MachineSettings.ANALYTES_IN_COLUMN.size());
+                System.out.println();
         });
 
         // ColumnDamage Button
@@ -1827,9 +1921,6 @@ public class ChromatographySimulator extends Application {
                                     .getSelectionModel()
                                     .getSelectedItems()
                     ));
-                    System.out.println(tableViewCustomSampleMixture
-                            .getSelectionModel()
-                            .getSelectedItems().size());
                     chemicalViewsInSampleMixture.setAll(chemicalViewsInSampleMixture.stream().distinct().collect(Collectors.toList()));
                     tableViewSetConcentrations.setItems(filteredData8);
                     rtHelperLabel.play();
@@ -2253,6 +2344,44 @@ public class ChromatographySimulator extends Application {
                                 iterations++;
                                 updateProgress(iterations, finalUserInputs.size());
                             }
+
+                            /*for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
+                                Platform.runLater(() -> {
+                                    XYChart.Series<Number, Number> series = new XYChart.Series<>();
+                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 0));
+                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 1));
+                                    lineChartSolBand.getData().add(series);
+
+                                    peak.columnTraversedProperty().addListener((observable, oldValue, newValue) -> {
+                                        series.getData().get(0).setXValue(newValue);
+                                        series.getData().get(1).setXValue(newValue);
+                                    });
+                                });
+                            }*/
+
+                            for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
+                                    XYChart.Series<Number, Number> series = new XYChart.Series<>();
+                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 0));
+                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 1));
+
+                                    ChangeListener<Number> listener = (observable, oldValue, newValue) -> {
+                                        series.getData().get(0).setXValue(newValue);
+                                        series.getData().get(1).setXValue(newValue);
+                                    };
+
+                                    WeakChangeListener<Number> weakListener = new WeakChangeListener<>(listener);
+                                    peak.columnTraversedProperty().addListener(weakListener);
+                                    colTravListeners.add(listener);
+
+                                // Store the strong reference to the listener somewhere.
+                                // For instance, you can keep a list of all listeners:
+                                Platform.runLater(() -> {
+                                    lineChartSolBand.getData().add(series);
+                                });
+                            }
+
+
+
                         } catch (IOException e) {
                             throw new RuntimeException("Bro, your csv datafile is messed up", e);
                         }
@@ -2383,7 +2512,6 @@ public class ChromatographySimulator extends Application {
                 installColumnButton.setText("Install Column");
                 installColumnButton.disableProperty()
                         .bind(MachineSettings.ovenTempProperty.greaterThan(40.0)
-                        .or(MachineSettings.isDetectorOn)
                         .or(noneSelected));
 
                 columnChoices.getDialogPane().setPrefWidth(750);
@@ -2890,9 +3018,9 @@ public class ChromatographySimulator extends Application {
                     }
 
                     // Warning message
-                    Label warningMessage1 = new Label("Error: FID Detector Active (Turn it off using the FID Button)");
-                    warningMessage1.setTextFill(Color.RED);
-                    warningMessage1.setFont(Font.font(null,FontWeight.BOLD,12));
+                    Label warningMessage1 = new Label("Warning: FID Detector Active (Turn off using FID button)");
+                    warningMessage1.setTextFill(Color.DODGERBLUE);
+                    warningMessage1.setFont(Font.font(null,FontWeight.NORMAL,12));
                     warningMessage1.visibleProperty().bind(MachineSettings.isDetectorOn);
                     Label warningMessage2 = new Label("Error: Oven Temperature >= 40 degrees C");
                     warningMessage2.setTextFill(Color.RED);
@@ -3015,11 +3143,11 @@ public class ChromatographySimulator extends Application {
                                 }else detectorSignal = 0;
 
                                 // Add datapoint every 50 ms (x = currentTime, y = detectorSignal)
-                                dataSeries.getData().add(new XYChart.Data<>(currentTime(), detectorSignal));
+                                dataSeriesDetector.getData().add(new XYChart.Data<>(currentTime(), detectorSignal));
 
                                 // Remove any datapoints that are older than 30 minutes
-                                if (dataSeries.getData().size() > 24000) {
-                                    dataSeries.getData().remove(0);
+                                if (dataSeriesDetector.getData().size() > 24000) {
+                                    dataSeriesDetector.getData().remove(0);
                                 }
                             });
                         }
@@ -3035,28 +3163,28 @@ public class ChromatographySimulator extends Application {
         // Action
         zoomAllData.setOnAction(e -> {
             // Set xAxis
-            xAxis.setAutoRanging(false);
-            yAxis.setAutoRanging(false);
-            List<XYChart.Data<Number, Number>> xDataList = dataSeries.getData();
+            xAxisDetector.setAutoRanging(false);
+            yAxisDetector.setAutoRanging(false);
+            List<XYChart.Data<Number, Number>> xDataList = dataSeriesDetector.getData();
             DoubleStream xDoubleStream1 = xDataList.stream()
                     .mapToDouble(data -> data.getXValue().doubleValue());
             double minX = xDoubleStream1.min().orElse(0);
             DoubleStream xDoubleStream2 = xDataList.stream()
                     .mapToDouble(data -> data.getXValue().doubleValue());
             double maxX = xDoubleStream2.max().getAsDouble();
-            xAxis.setLowerBound(minX);
-            xAxis.setUpperBound(maxX + 30); // 30 seconds out from currentTime
-            xAxis.setTickUnit(xAxis.getUpperBound()/10.0);
+            xAxisDetector.setLowerBound(minX);
+            xAxisDetector.setUpperBound(maxX + 30); // 30 seconds out from currentTime
+            xAxisDetector.setTickUnit(xAxisDetector.getUpperBound()/10.0);
 
             // Set yAxis
-            yAxis.setLowerBound(0);
-            List<XYChart.Data<Number, Number>> yDataList = dataSeries.getData();
+            yAxisDetector.setLowerBound(0);
+            List<XYChart.Data<Number, Number>> yDataList = dataSeriesDetector.getData();
             double maxY = yDataList.stream()
                     .mapToDouble(data -> data.getYValue().doubleValue())
                     .max()
                     .orElse(100); // return maxY in the dataList or 100 if there is no XYChart.Data (null)
-            yAxis.setUpperBound(maxY + 100);
-            yAxis.setTickUnit(yAxis.getUpperBound()/10.0);
+            yAxisDetector.setUpperBound(maxY + 100);
+            yAxisDetector.setTickUnit(yAxisDetector.getUpperBound()/10.0);
         });
 
         // TOGGLE AUTOZOOM BUTTON
@@ -3066,8 +3194,8 @@ public class ChromatographySimulator extends Application {
         toggleAutoZoom.setPrefHeight(45);
         // Action
         toggleAutoZoom.setOnAction(e -> {
-            xAxis.setAutoRanging(xAxis.autoRangingProperty().not().get());
-            yAxis.setAutoRanging(yAxis.autoRangingProperty().not().get());
+            xAxisDetector.setAutoRanging(xAxisDetector.autoRangingProperty().not().get());
+            yAxisDetector.setAutoRanging(yAxisDetector.autoRangingProperty().not().get());
         });
 
         // CLICK-AND-DRAG-DEFINED ZOOMING FUNCTIONALITY
@@ -3103,18 +3231,19 @@ public class ChromatographySimulator extends Application {
         SimpleDoubleProperty minY = new SimpleDoubleProperty(clickDragRectangle,"minY");
         SimpleDoubleProperty maxY = new SimpleDoubleProperty(clickDragRectangle,"maxY");
         root.getChildren().add(clickDragRectangle);
+        clickDragRectangle.setViewOrder(-Double.MAX_VALUE);
         // ACTION 1 -- ESTABLISH ORIGIN OF ZOOMING RECTANGLE (AND GET minX & maxY)
-        lineChart.addEventHandler(MouseEvent.MOUSE_PRESSED, e1 -> {
+        lineChartDetector.addEventHandler(MouseEvent.MOUSE_PRESSED, e1 -> {
             // 205 pixels is area of LineChart that I don't want users to be able to click on
             if (e1.isControlDown() && e1.getSceneX() > 205.0){
-                xAxis.setAutoRanging(false);
-                yAxis.setAutoRanging(false);
+                xAxisDetector.setAutoRanging(false);
+                yAxisDetector.setAutoRanging(false);
 
                 Point2D mousePressPointInScene = new Point2D(e1.getSceneX(), e1.getSceneY());
-                double xPosInNumberAxis = xAxis.sceneToLocal(new Point2D(mousePressPointInScene.getX(), 0)).getX();
-                double yPosInNumberAxis = yAxis.sceneToLocal(new Point2D(0, mousePressPointInScene.getY())).getY();
-                double x = xAxis.getValueForDisplay(xPosInNumberAxis).doubleValue();
-                double y = yAxis.getValueForDisplay(yPosInNumberAxis).doubleValue();
+                double xPosInNumberAxis = xAxisDetector.sceneToLocal(new Point2D(mousePressPointInScene.getX(), 0)).getX();
+                double yPosInNumberAxis = yAxisDetector.sceneToLocal(new Point2D(0, mousePressPointInScene.getY())).getY();
+                double x = xAxisDetector.getValueForDisplay(xPosInNumberAxis).doubleValue();
+                double y = yAxisDetector.getValueForDisplay(yPosInNumberAxis).doubleValue();
 
                 clickDragRectangle.setX(e1.getSceneX());
                 minX.set(x);
@@ -3126,15 +3255,15 @@ public class ChromatographySimulator extends Application {
             }
         });
         // ACTION 2 -- DRAG MOUSE FOR SETTING WIDTH & HEIGHT OF ZOOMING RECTANGLE (GET maxX & minY)
-        lineChart.addEventHandler(MouseEvent.MOUSE_DRAGGED, e2 -> {
+        lineChartDetector.addEventHandler(MouseEvent.MOUSE_DRAGGED, e2 -> {
             // 205 pixels is area of LineChart that I don't want users to be able to click on
             if (e2.isControlDown() && clickDragRectangle.isVisible() && e2.getSceneX() > 205.0) {
 
                 Point2D dragToPointInScene = new Point2D(e2.getSceneX(), e2.getSceneY());
-                double xPosInNumberAxis = xAxis.sceneToLocal(new Point2D(dragToPointInScene.getX(), 0)).getX();
-                double yPosInNumberAxis = yAxis.sceneToLocal(new Point2D(0, dragToPointInScene.getY())).getY();
-                double x = xAxis.getValueForDisplay(xPosInNumberAxis).doubleValue();
-                double y = yAxis.getValueForDisplay(yPosInNumberAxis).doubleValue();
+                double xPosInNumberAxis = xAxisDetector.sceneToLocal(new Point2D(dragToPointInScene.getX(), 0)).getX();
+                double yPosInNumberAxis = yAxisDetector.sceneToLocal(new Point2D(0, dragToPointInScene.getY())).getY();
+                double x = xAxisDetector.getValueForDisplay(xPosInNumberAxis).doubleValue();
+                double y = yAxisDetector.getValueForDisplay(yPosInNumberAxis).doubleValue();
 
                 // Establish ZoomRectangle's width & height in ScenePixels
                 clickDragRectangle.setWidth(Math.abs(e2.getSceneX() - clickDragRectangle.getX()));
@@ -3144,17 +3273,17 @@ public class ChromatographySimulator extends Application {
             }
         });
         // ACTION 3 -- UPDATE X AND Y AXES UPPER AND LOWER BOUNDS (ZOOM TO zoomRectangle)
-        lineChart.addEventHandler(MouseEvent.MOUSE_RELEASED, e -> {
+        lineChartDetector.addEventHandler(MouseEvent.MOUSE_RELEASED, e -> {
             if (clickDragRectangle.isVisible()) {
-                xAxis.setLowerBound(Math.max(minX.get(), 0));
-                xAxis.setUpperBound(maxX.get());
-                yAxis.setLowerBound(Math.max(minY.get(),0));
-                yAxis.setUpperBound(maxY.get());
+                xAxisDetector.setLowerBound(Math.max(minX.get(), 0));
+                xAxisDetector.setUpperBound(maxX.get());
+                yAxisDetector.setLowerBound(Math.max(minY.get(),0));
+                yAxisDetector.setUpperBound(maxY.get());
                 clickDragRectangle.setVisible(false);
 
                 // Set tickUnits
-                xAxis.setTickUnit((int)(xAxis.getUpperBound()/10.0));
-                yAxis.setTickUnit((int)(yAxis.getUpperBound()/10.0));
+                xAxisDetector.setTickUnit((int)(xAxisDetector.getUpperBound()/10.0));
+                yAxisDetector.setTickUnit((int)(yAxisDetector.getUpperBound()/10.0));
             }
         });
 
@@ -3164,23 +3293,23 @@ public class ChromatographySimulator extends Application {
         zoomIn.setIconSize(20);
         zoomInButton.setGraphic(zoomIn);
         zoomInButton.setOnAction(e -> {
-            xAxis.setAutoRanging(false);
-            yAxis.setAutoRanging(false);
-            double currentLowX = xAxis.getLowerBound();
-            double currentHighX = xAxis.getUpperBound();
+            xAxisDetector.setAutoRanging(false);
+            yAxisDetector.setAutoRanging(false);
+            double currentLowX = xAxisDetector.getLowerBound();
+            double currentHighX = xAxisDetector.getUpperBound();
             double xRange = Math.abs(currentHighX - currentLowX);
-            double currentLowY = yAxis.getLowerBound();
-            double currentHighY = yAxis.getUpperBound();
+            double currentLowY = yAxisDetector.getLowerBound();
+            double currentHighY = yAxisDetector.getUpperBound();
             double yRange = Math.abs(currentHighY - currentLowY);
 
-            xAxis.setLowerBound(currentLowX+(0.10*xRange));
-            xAxis.setUpperBound(currentHighX-(0.10*xRange));
+            xAxisDetector.setLowerBound(currentLowX+(0.10*xRange));
+            xAxisDetector.setUpperBound(currentHighX-(0.10*xRange));
 //            yAxis.setLowerBound(currentLowY+(0.10*yRange));
-            yAxis.setUpperBound(currentHighY-(0.10*yRange));
+            yAxisDetector.setUpperBound(currentHighY-(0.10*yRange));
 
             // Set tickUnits
-            xAxis.setTickUnit((int)(currentHighX/10.0));
-            yAxis.setTickUnit((int)(currentHighY/10.0));
+            xAxisDetector.setTickUnit((int)(currentHighX/10.0));
+            yAxisDetector.setTickUnit((int)(currentHighY/10.0));
         });
 
         Button zoomOutButton = new Button();
@@ -3190,28 +3319,53 @@ public class ChromatographySimulator extends Application {
 
         // ZOOM-OUT BUTTON
         zoomOutButton.setOnAction(e -> {
-            xAxis.setAutoRanging(false);
-            yAxis.setAutoRanging(false);
-            double currentLowX = xAxis.getLowerBound();
-            double currentHighX = xAxis.getUpperBound();
+            xAxisDetector.setAutoRanging(false);
+            yAxisDetector.setAutoRanging(false);
+            double currentLowX = xAxisDetector.getLowerBound();
+            double currentHighX = xAxisDetector.getUpperBound();
             double xRange = Math.abs(currentHighX - currentLowX);
-            double currentLowY = yAxis.getLowerBound();
-            double currentHighY = yAxis.getUpperBound();
+            double currentLowY = yAxisDetector.getLowerBound();
+            double currentHighY = yAxisDetector.getUpperBound();
             double yRange = Math.abs(currentHighY - currentLowY);
 
-            xAxis.setLowerBound(Math.max(currentLowX-(xRange*0.10),0));
-            xAxis.setUpperBound(currentHighX+(xRange*0.10));
-            yAxis.setUpperBound(currentHighY*1.10);
-            yAxis.setLowerBound(Math.max(currentLowY-(yRange*0.10),0));
+            xAxisDetector.setLowerBound(Math.max(currentLowX-(xRange*0.10),0));
+            xAxisDetector.setUpperBound(currentHighX+(xRange*0.10));
+            yAxisDetector.setUpperBound(currentHighY*1.10);
+            yAxisDetector.setLowerBound(Math.max(currentLowY-(yRange*0.10),0));
 
             // Set tickUnits
-            xAxis.setTickUnit((int)(currentHighX/10.0));
-            yAxis.setTickUnit((int)(currentHighY/10.0));
+            xAxisDetector.setTickUnit((int)(currentHighX/10.0));
+            yAxisDetector.setTickUnit((int)(currentHighY/10.0));
         });
 
         // UTILITY BUTTON
         Button utilityButton = new Button("utility");
+        SimpleBooleanProperty toggleProp = new SimpleBooleanProperty(true);
         utilityButton.setOnAction(e->{
+
+            /*root.setBorder(new Border(
+                    new BorderStroke(
+                            Color.BLACK,
+                            BorderStrokeStyle.DASHED,
+                            CornerRadii.EMPTY,
+                            BorderStroke.THICK))
+            );*/
+
+            if (toggleProp.get()){
+                root.setCenter(new VBox(lineChartSolBand,lineChartDetector){
+                    {
+                        setAlignment(Pos.CENTER_RIGHT);
+                        setSpacing(0);
+                    }
+                });
+                toggleProp.set(false);
+                return;
+            }
+            if (!toggleProp.get()){
+                root.setCenter(lineChartDetector);
+                toggleProp.set(true);
+                return;
+            }
             /*System.out.println("casToChemical.size() = " + casToChemical.size());*/
            /* Runtime runtime = Runtime.getRuntime();
             long usedMemory = runtime.totalMemory() - runtime.freeMemory();
@@ -3279,8 +3433,6 @@ public class ChromatographySimulator extends Application {
                     return;
                 }
 
-
-
                 Platform.runLater(() -> {
                     // Increment Internal Clock
                     incCurrentTime();
@@ -3341,11 +3493,11 @@ public class ChromatographySimulator extends Application {
                     }else detectorSignal = 0;
 
                     // Add datapoint every 50 ms (x = currentTime, y = detectorSignal)
-                    dataSeries.getData().add(new XYChart.Data<>(currentTime(), detectorSignal));
+                    dataSeriesDetector.getData().add(new XYChart.Data<>(currentTime(), detectorSignal));
 
                     // Remove any datapoints that are older than 30 minutes
-                    if (dataSeries.getData().size() > 24000) {
-                        dataSeries.getData().remove(0);
+                    if (dataSeriesDetector.getData().size() > 24000) {
+                        dataSeriesDetector.getData().remove(0);
                     }
                     runCounter++;
                 });
