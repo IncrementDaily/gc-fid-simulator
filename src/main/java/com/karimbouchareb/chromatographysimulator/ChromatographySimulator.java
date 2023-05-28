@@ -904,8 +904,8 @@ public class ChromatographySimulator extends Application {
         private double proportionOfColumnTraversed(){
             return proportionOfColumnTraversed;
         }
-        private int simulationStepsRemainingUntilPeakElutes(){
-            return (int) Math.ceil(proportionOfColumnUntraversed()
+        private double simulationStepsRemainingUntilPeakElutes(){
+            return Math.ceil(proportionOfColumnUntraversed()
                     /traversalProgressPerSimulationStep());
         }
         private double secondsRemainingUntilPeakElutes(){
