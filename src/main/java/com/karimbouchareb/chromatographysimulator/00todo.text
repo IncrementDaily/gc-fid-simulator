@@ -1,5 +1,18 @@
 https://ctr.fandom.com/wiki/Ring_counts_in_a_SMILES_file#:~:text=One%20way%20to%20compute%20the,the%20most%20chemically%20relevant%20rings.
 
+(NXTEXTT) Problem with Traversal here:
+ // Update all the peaks and make them traverse the column
+                                for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
+                                    // Check if the peak is eluting; if it is, don't update it.
+                                    if (currentTime() >= (peak.getElutionTime()
+                                            - peak.ascendingCurve.calcWidthOfHalfCurve())) { // TODO: 5/26/2023 PROBLEM HERE WITH TRAVERSAL
+                                        continue;
+                                    } else {
+                                        peak.updatePeak();
+                                        peak.traverseColumn();
+                                    }
+                                }
+
 (ENXTXTT) Don't forget the Pareto distribution generator button in inject stage
 
 (NEXXXTTXTT) Use the LoadProgress Bar for the initializePeaks task

@@ -514,7 +514,7 @@ public class ChromatographySimulator extends Application {
             double ratio = (ovenTemperature - MachineSettings.OVEN_TEMPERATURE_MIN) /
                     (MachineSettings.OVEN_TEMPERATURE_MAX - MachineSettings.OVEN_TEMPERATURE_MIN);
             double holdUpTimeRange = maxHoldUpTime - minHoldUpTime;
-            return minHoldUpTime + (holdUpTimeRange*ratio);
+            return maxHoldUpTime - (holdUpTimeRange*ratio);
         }
         // If column has been damaged, column LSER constant values are lowered proportionally (column less able to
         // perform separatory function).
@@ -2987,7 +2987,7 @@ public class ChromatographySimulator extends Application {
                                 for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                                     // Check if the peak is eluting; if it is, don't update it.
                                     if (currentTime() >= (peak.getElutionTime()
-                                            - peak.ascendingCurve.calcWidthOfHalfCurve())) {
+                                            - peak.ascendingCurve.calcWidthOfHalfCurve())) { // TODO: 5/26/2023 PROBLEM HERE WITH TRAVERSAL
                                         continue;
                                     } else {
                                         peak.updatePeak();
