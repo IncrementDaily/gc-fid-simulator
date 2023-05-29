@@ -955,8 +955,8 @@ public class ChromatographySimulator extends Application {
         private double proportionOfColumnUntraversed(){
             return 1.0 - proportionOfColumnTraversed();
         }
-        private int simulationStepsRemainingUntilPeakElutes(){
-            return (int) Math.ceil(proportionOfColumnUntraversed()
+        private double simulationStepsRemainingUntilPeakElutes(){
+            return Math.ceil(proportionOfColumnUntraversed()
                     /traversalProgressPerSimulationStep());
         }
         private double secondsRemainingUntilPeakElutes(){
@@ -2345,20 +2345,8 @@ public class ChromatographySimulator extends Application {
                                 updateProgress(iterations, finalUserInputs.size());
                             }
 
-                            /*for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
-                                Platform.runLater(() -> {
-                                    XYChart.Series<Number, Number> series = new XYChart.Series<>();
-                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 0));
-                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 1));
-                                    lineChartSolBand.getData().add(series);
-
-                                    peak.columnTraversedProperty().addListener((observable, oldValue, newValue) -> {
-                                        series.getData().get(0).setXValue(newValue);
-                                        series.getData().get(1).setXValue(newValue);
-                                    });
-                                });
-                            }*/
-
+                            // Create Solute Bands for Monitoring Progress inside Column Visually
+                            List<XYChart.Series<Number,Number>> listSoluteBandSeries = new ArrayList<>();
                             for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                                     XYChart.Series<Number, Number> series = new XYChart.Series<>();
                                     series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 0));
@@ -2371,17 +2359,16 @@ public class ChromatographySimulator extends Application {
 
                                     WeakChangeListener<Number> weakListener = new WeakChangeListener<>(listener);
                                     peak.columnTraversedProperty().addListener(weakListener);
-                                    colTravListeners.add(listener);
 
-                                // Store the strong reference to the listener somewhere.
-                                // For instance, you can keep a list of all listeners:
-                                Platform.runLater(() -> {
-                                    lineChartSolBand.getData().add(series);
-                                });
+                                // Store the strong reference to the listener (clear() later for easy Garbage Collection)
+                                colTravListeners.add(listener);
+                                listSoluteBandSeries.add(series);
                             }
-
-
-
+                            // Add all solute band series into the lineChart on the JavaFX Application thread
+                            // to prevent concurrency issues
+                            Platform.runLater(() -> {
+                                lineChartSolBand.getData().addAll(listSoluteBandSeries);
+                            });
                         } catch (IOException e) {
                             throw new RuntimeException("Bro, your csv datafile is messed up", e);
                         }
