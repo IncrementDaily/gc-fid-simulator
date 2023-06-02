@@ -2728,10 +2728,9 @@ public class ChromatographySimulator extends Application {
                         Label genInfo = new Label("5%: 1,4-Bis(dimethylsiloxy)phenylene 95%: (poly)dimethylsiloxane");
                         Label eInfo = new Label("Slight e-LonePair/Pi-PI selection");
                         Label sInfo = new Label("Mild Dipole/Dipole selection");
-                        Label aInfoLOW = new Label("Mild H-Bond selection (Low Temp)");
-                        Label aInfoHIGH = new Label("Slight H-Bond selection (High Temp)");
+                        Label aInfo = new Label("Slight H-Bond selection");
                         Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
-                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfoLOW,aInfoHIGH,lInfo);
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
                         selectivityInfo.setPadding(new Insets(20));
                         selectivityInfo.setSpacing(7.0);
                         selectivityInfo.setAlignment(Pos.CENTER);
@@ -2833,12 +2832,11 @@ public class ChromatographySimulator extends Application {
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("\"Similar to 20% (poly)methyltrifluoropropylsiloxane 80% dimethyl\"");
-                        Label eInfoLOW = new Label("Mild to Slight e-LonePair/Pi-Pi Anti-Selection (Low Temp)");
-                        Label eInfoHIGH = new Label("Slight to Almost No e-LonePair/Pi-Pi Selection (High Temp)");
+                        Label eInfo = new Label("Slight to Almost No e-LonePair/Pi-Pi Selection");
                         Label sInfo = new Label("Moderate Dipole/Dipole selection");
                         Label aInfo = new Label("Slight H-Bond selection");
                         Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
-                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfoLOW,eInfoHIGH,sInfo,aInfo,lInfo);
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
                         selectivityInfo.setPadding(new Insets(20));
                         selectivityInfo.setSpacing(7.0);
                         selectivityInfo.setAlignment(Pos.CENTER);
@@ -2889,10 +2887,9 @@ public class ChromatographySimulator extends Application {
                         Label genInfo = new Label("\"Similar to 6% (poly)cyanopropylphenylsiloxane 94% dimethyl\"");
                         Label eInfo = new Label("Slight e-LonePair/Pi-Pi selection");
                         Label sInfo = new Label("Mild Dipole/Dipole selection");
-                        Label aInfoLOW = new Label("Mild H-Bond selection (Low Temp)");
-                        Label aInfoHIGH = new Label("Slight H-Bond selection (High Temp)");
+                        Label aInfo = new Label("Slight To Mild H-Bond selection");
                         Label lInfo = new Label("Mild-Moderate Cavity/Dispersion selection");
-                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfoLOW,aInfoHIGH,lInfo);
+                        VBox selectivityInfo = new VBox(stationaryPhase,genInfo,eInfo,sInfo,aInfo,lInfo);
                         selectivityInfo.setPadding(new Insets(20));
                         selectivityInfo.setSpacing(7.0);
                         selectivityInfo.setAlignment(Pos.CENTER);
@@ -2988,13 +2985,7 @@ public class ChromatographySimulator extends Application {
                     warningMessage2.setTextFill(Color.RED);
                     warningMessage2.setFont(Font.font(null,FontWeight.BOLD,12));
                     warningMessage2.visibleProperty().bind(MachineSettings.ovenTempProperty.greaterThan(40.0));
-                    Label columnWarning = new Label("Tip: If you uninstall your current column, it will still contain any uneluted analytes if you later reinstall it.");
-                    columnWarning.setFont(Font.font(null, FontPosture.ITALIC,12));
-                    columnWarning.setTextFill(Color.DODGERBLUE);
-                    columnWarning.setWrapText(true);
-                    columnWarning.setMaxWidth(250);
-                    columnChoicesRoot.getChildren().addAll(columnWarning,
-                        columnChoicesGrid, warningMessage1,warningMessage2);
+                    columnChoicesRoot.getChildren().addAll(columnChoicesGrid, warningMessage1,warningMessage2);
                 columnChoices.getDialogPane().setHeader(columnChoicesRoot);
 
                 Optional<Column> result = columnChoices.showAndWait();
