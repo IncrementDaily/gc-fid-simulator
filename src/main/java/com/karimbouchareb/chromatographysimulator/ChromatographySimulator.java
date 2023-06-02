@@ -816,9 +816,11 @@ public class ChromatographySimulator extends Application {
         private double proportionOfColumnTraversed(){
             return proportionOfColumnTraversed;
         }
+
         private double proportionOfColumnUntraversed(){
             return 1.0 - proportionOfColumnTraversed();
         }
+
         private double simulationStepsRemainingUntilPeakElutes(){
             return Math.ceil(proportionOfColumnUntraversed()
                     /traversalProgressPerSimulationStep());
