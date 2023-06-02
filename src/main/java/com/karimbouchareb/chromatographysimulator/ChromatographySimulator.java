@@ -10,6 +10,7 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.WeakChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.ObservableMap;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
@@ -84,7 +85,10 @@ public class ChromatographySimulator extends Application {
     private static final Screen SCREEN = Screen.getPrimary();
     private static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
     private static LineChart<Number, Number> lineChartSolBand;
-    private static List<ChangeListener> colTravListeners = FXCollections.observableArrayList();
+    private static Map<Peak, ChangeListener> peakToSolBandChangeListener = new ConcurrentHashMap<>(512);
+    private static Map<Peak, XYChart.Series> peakToSolBandDataSeries = new ConcurrentHashMap<>(512);
+    private static Map<XYChart.Series, Peak> solBandDataSeriesToPeak = new ConcurrentHashMap<>(512);
+    private static SimpleIntegerProperty soluteBandCountProperty = new SimpleIntegerProperty(0);
 
     // MAIN SCENE
     private static Scene mainScene;
@@ -96,6 +100,7 @@ public class ChromatographySimulator extends Application {
     private static ObservableList<ChemicalView> obsListChemicalViews = FXCollections.observableArrayList();
     // 8192 initial capacity (4212 unique Chemicals / 0.75 load factor = 5616; 2**12 = 4096, 2**13 = 8192)
     private static ConcurrentHashMap<String,Chemical> casToChemical = new ConcurrentHashMap<>(8192);
+    ArrayList<ChemicalView> finalUserInputs_ChemViews = new ArrayList<>();
     private static double paretoDouble(double scale, double shape) {
         Random rand = new Random();
         double u = rand.nextDouble();
@@ -139,9 +144,12 @@ public class ChromatographySimulator extends Application {
     private static void restartSimulation(){
         // Restart Peaks & Time (including removal of listener pointers for columnTraversal properties)
         CURRENT_TIME = 0.0;
-        colTravListeners.clear();
-        MachineSettings.ANALYTES_IN_COLUMN.clear();
+        peakToSolBandChangeListener.clear();
+        peakToSolBandDataSeries.clear();
+        solBandDataSeriesToPeak.clear();
         lineChartSolBand.getData().clear();
+        soluteBandCountProperty.set(0);
+        MachineSettings.ANALYTES_IN_COLUMN.clear();
 
         // Restart Columns
         for (Column column : Column.values()){
@@ -158,74 +166,6 @@ public class ChromatographySimulator extends Application {
         MachineSettings.OVEN_TEMPERATURE_TARGET = 25;
         // Restart Detector
         MachineSettings.isDetectorOn.set(true);
-    }
-
-    @SuppressWarnings("ReassignedVariable")
-    private static void initializePeaks(List<ChemicalView> userInputs){
-        /*try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
-             CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
-                     "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
-                     "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
-
-            int iterations = 0;
-            for (CSVRecord record : parser){
-                String chemicalNameOfInput;
-                String chemicalNameOfRecord;
-                Chemical analyte;
-                double percentWeight;
-                double mgAnalyteInjectedToInlet;
-                double gAnalyteEnteringColumn;
-                double ngAnalyteEnteringColumn;
-                double molecularWeightAnalyte;
-                double molesAnalyteEnteringColumn;
-                double MRFAnalyte;
-                double peakArea;
-                double injectionTime;
-                double elutionTime;
-                double columnAdjustedOverloadMass;
-                double peakFrontingIndex;
-                double peakTailingIndex;
-                if (record.getRecordNumber() == 1) continue;
-                chemicalNameOfRecord = record.get("chemicalName");
-                for (ChemicalView input : userInputs){
-                    chemicalNameOfInput = input.getName();
-                    if (!chemicalNameOfRecord.equals(chemicalNameOfInput)) continue;
-                    analyte = new Chemical(chemicalNameOfInput);
-                    percentWeight = input.getConcentration()/100.0; // percentWeight = %Weight of 1 uL injection (total weight assumed 1 mg / uL, densities NOT factored in)
-                    mgAnalyteInjectedToInlet = percentWeight*MachineSettings.INJECTION_VOLUME;
-                    ngAnalyteEnteringColumn = mgAnalyteInjectedToInlet*1_000_000.0 / MachineSettings.SPLIT_RATIO;
-                    gAnalyteEnteringColumn = ngAnalyteEnteringColumn/1_000_000_000.0;
-                    molecularWeightAnalyte = analyte.molecularWeight;
-                    molesAnalyteEnteringColumn = (gAnalyteEnteringColumn/molecularWeightAnalyte);
-                    MRFAnalyte = analyte.molarResponseFactor;
-
-                    peakArea = molesAnalyteEnteringColumn*MRFAnalyte*MRF_PROPORTIONALITY_CONST;
-                    injectionTime = currentTime();
-                    elutionTime = injectionTime+analyte.calcRetentionTime();
-
-                    columnAdjustedOverloadMass = analyte.adjustedOverloadMass();
-                    peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX;
-                    if (ngAnalyteEnteringColumn > columnAdjustedOverloadMass){
-                        peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX + (ngAnalyteEnteringColumn/columnAdjustedOverloadMass);
-                    };
-                    peakTailingIndex = Peak.IDEAL_PEAK_TAILING_INDEX;
-                    if(MachineSettings.IS_COLUMN_CUT_POORLY){
-                        peakTailingIndex = 2.1; // TODO: 5/3/2023 IMPLEMENT THIS WELL EVENTUALLY
-                    }
-
-                    Peak currentPeak = new Peak.Builder(analyte,peakArea,injectionTime)
-                            .ascendingCurve(peakArea,elutionTime, GaussianCurve.IDEAL_PEAK_SIGMA)
-                            .descendingCurve(peakArea,elutionTime,GaussianCurve.IDEAL_PEAK_SIGMA)
-                            .peakFrontingIndex(peakFrontingIndex)
-                            .peakTailingIndex(peakTailingIndex)
-                            .build();
-                    MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
-                }
-                iterations++;
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }*/
     }
 
     // UI
@@ -249,6 +189,12 @@ public class ChromatographySimulator extends Application {
         } else {
             return null;
         }
+    }
+    private static String toHexString(Color color) {
+        int r = (int) Math.round(color.getRed() * 255);
+        int g = (int) Math.round(color.getGreen() * 255);
+        int b = (int) Math.round(color.getBlue() * 255);
+        return String.format("#%02X%02X%02X", r, g, b);
     }
 
 // TOP-LEVEL STATIC MEMBER CLASSES
@@ -301,7 +247,7 @@ public class ChromatographySimulator extends Application {
             Random random = new Random();
             if (CURRENT_COLUMN_REMAINING < 1.0){
                 meanNoise = (meanNoise * CURRENT_COLUMN_REMAINING)+0.1;
-                stdDevNoise = (stdDevNoise * CURRENT_COLUMN_REMAINING)+0.001;
+                stdDevNoise = (stdDevNoise * CURRENT_COLUMN_REMAINING)+0.003;
             }
             double noise = meanNoise + stdDevNoise * random.nextGaussian();
             // Add extra noise to baseline if column is overheated & damaged
@@ -344,7 +290,7 @@ public class ChromatographySimulator extends Application {
             MachineSettings.CURRENT_COLUMN_REMAINING = 0.999;
         }
         double overMaxQuotient = (MachineSettings.OVEN_TEMPERATURE - MachineSettings.CURRENT_COLUMN.maxTemp) / MachineSettings.CURRENT_COLUMN.maxTemp;
-        // min = 0.0002941 (SPB_OCTYL maxTemp = 340, ovenTemp = 341); max = 0.4583 (DB_225 maxTemp = 240, ovenTemp = 350)
+        // min = 0.0002941 (HP-5 maxTemp = 340, ovenTemp = 341); max = 0.4583 (DB_225 maxTemp = 240, ovenTemp = 350)
         // if overMaxQuotient = 0.002941, then damageRate = 0.999849151 and bleedRate = 1.00026111
         // if overMaxQuotient = 0.4583, then damageRate = 0.997617625 and bleedRate = 1.00412375
         // damageRateRange = 0.002231526
@@ -578,41 +524,6 @@ public class ChromatographySimulator extends Application {
         private double a;
         private double l;
 
-        /*private static class Builder{
-            private String casNumber = "-1";
-            private String chemicalName = "-1";
-            private double molarResponseFactor = -1;
-            private double molecularWeight = -1;
-            private double overloadMass_1 = -1;
-            private double e = -1;
-            private double s = -1;
-            private double a = -1;
-            private double l = -1;
-
-            public Builder casNumber(String casNumber)
-            {this.casNumber = casNumber;                            return this;}
-            public Builder chemicalName(String chemicalName)
-            {this.chemicalName = chemicalName;                      return this;}
-            public Builder molarResponseFactor(double molarResponseFactor)
-            {this.molarResponseFactor = molarResponseFactor;        return this;}
-            public Builder molecularWeight(double molecularWeight)
-            {this.molecularWeight = molecularWeight;                return this;}
-            public Builder overloadMass_1(double overloadMass_1)
-            {this.overloadMass_1 = overloadMass_1;                  return this;}
-            public Builder e(double e)
-            {this.e = e;                                            return this;}
-            public Builder s(double s)
-            {this.s = s;                                            return this;}
-            public Builder a(double a)
-            {this.a = a;                                            return this;}
-            public Builder l(double l)
-            {this.l = l;                                            return this;}
-
-            public Chemical build() {
-                return new Chemical(this);
-            }
-        }*/
-
         public Chemical(String chemicalName) {
             this.chemicalName = chemicalName;
 
@@ -659,28 +570,6 @@ public class ChromatographySimulator extends Application {
             this.l = l;
         }
 
-        /*public Chemical(Chemical.Builder builder){
-                    // Sanity check builder
-                    if (builder.casNumber.equals("-1")
-                    || builder.chemicalName.equals("-1")
-                    || builder.molarResponseFactor == -1
-                    || builder.molecularWeight == -1
-                    || builder.overloadMass_1 == -1
-                    || builder.e == -1
-                    || builder.s == -1
-                    || builder.a == -1
-                    || builder.l == -1
-                    ) throw new IllegalStateException("Chemical Builder: one or more params not set");
-                    this.casNumber = builder.casNumber;
-                    this.chemicalName = builder.chemicalName;
-                    this.molarResponseFactor = builder.molarResponseFactor;
-                    this.molecularWeight = builder.molecularWeight;
-                    this.overloadMass_1 = builder.overloadMass_1;
-                    this.e = builder.e;
-                    this.s = builder.s;
-                    this.a = builder.a;
-                    this.l = builder.l;
-                }*/
         private Chemical(int negativeOne){
             try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
                  CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
@@ -702,13 +591,10 @@ public class ChromatographySimulator extends Application {
             this.a = -1;
             this.l = -1;
         }
-
         private static Chemical nullChem(){
             return new Chemical (-1);
         }
-        /*public static Chemical.Builder builder(){
-            return new Chemical.Builder();
-        }*/
+
         private double calcRetentionFactor(){
             double logk = e* MachineSettings.CURRENT_COLUMN.E(MachineSettings.OVEN_TEMPERATURE)
                     + s* MachineSettings.CURRENT_COLUMN.S(MachineSettings.OVEN_TEMPERATURE)
@@ -751,37 +637,16 @@ public class ChromatographySimulator extends Application {
             result = 31 * result + casNumber.hashCode();
             return result;
         }
-        /*@Override
+        public Color hashColor(){
+            double r = Math.abs(chemicalName.hashCode()%100.0/100.0);
+            double g = Math.abs(casNumber.hashCode()%100.0/100.0);
+            double b = Math.abs(((Double) molecularWeight).hashCode()%100.0/100.0);
+            Color hashColor = Color.color(r,g,b, 0.65);
+            return hashColor;
+        }
+        @Override
     	public String toString(){
     		return chemicalName;
-        }*/
-
-        @Override
-        public String toString(){
-            return new StringBuilder()
-                    .append(chemicalName)
-                    .append("\n")
-                    .append("[")
-                    .append(e)
-                    .append(" ")
-                    .append(s)
-                    .append(" ")
-                    .append(a)
-                    .append(" ")
-                    .append(l)
-                    .append("]")
-                    .append("\n")
-                    .append("{")
-                    .append("MW=" + molecularWeight + " ")
-                    .append("MRF=" + molarResponseFactor + " ")
-                    .append("OLM=" + overloadMass_1)
-                    .append("}")
-                    .append("\n")
-                    .append("RT=" + calcRetentionTime())
-                    .append("\n")
-                    .append("RF=" + calcRetentionFactor())
-                    .append("\n")
-                    .toString();
         }
     }
     private static class ChemicalView implements Comparable<ChemicalView> {
@@ -854,7 +719,7 @@ public class ChromatographySimulator extends Application {
         private final double injectionTime;
         private double proportionOfColumnTraversed = 0.0; // Range from 0.0 to 1.0;
         private SimpleDoubleProperty columnTraversedProperty = new SimpleDoubleProperty(0.0);
-        private AtomicBoolean isEluting = new AtomicBoolean(false);
+        private volatile AtomicBoolean isEluting = new AtomicBoolean(false);
         private double elutionTime;
         private GaussianCurve ascendingCurve;
         private GaussianCurve descendingCurve;
@@ -914,7 +779,6 @@ public class ChromatographySimulator extends Application {
             this.peakTailingIndex = builder.peakTailingIndex;
             elutionTime = builder.analyte.calcRetentionTime() + injectionTime;
         }
-
 
         public double getColumnTraversed() {
             return columnTraversedProperty.get();
@@ -980,10 +844,12 @@ public class ChromatographySimulator extends Application {
         }
         public void updatePeakShape(){
             // Update peak widths based on circumstances
+            if (MachineSettings.TEMP_COOLING.get()) peakTailingIndex += 0.001;
             peakBroadeningIndex = IDEAL_PEAK_BROADENING_INDEX + analyte.calcRetentionTime()* PEAK_BROAD_COEFF;
-//            peakBroadeningIndex += CURRENT_COLUMN_DAMAGE*(Math.random()*2.0); // non-deterministic behavior if column damaged
+            peakBroadeningIndex += MachineSettings.CURRENT_COLUMN_DAMAGE*(Math.random()*5.0); // non-deterministic behavior if column damaged
             ascendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakFrontingIndex*peakBroadeningIndex);
             descendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakTailingIndex*peakBroadeningIndex);
+
 
             // Maintain same peak amplitude, while continuing to sum to correct peakArea
             updateAmplitudes(peakArea, ascendingCurve, descendingCurve);
@@ -1019,13 +885,6 @@ public class ChromatographySimulator extends Application {
             int result = analyte.hashCode();
             result = 31 * result + Double.hashCode(injectionTime);
             return result;
-        }
-
-        private String colorHash(){
-            String colorHash = new StringBuilder()
-                    .append("")
-                    .toString();
-            return colorHash;
         }
 
         public String toString(){
@@ -1234,6 +1093,7 @@ public class ChromatographySimulator extends Application {
         mainStage.setScene(mainScene);
         mainStage.setMaximized(true);
         mainStage.show();
+        lineChartSolBand.requestFocus(); // remove focus from clear solute bands button at startup
     }
     private void showSplash(Stage initStage) {
         Scene splashScene = new Scene(splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
@@ -1304,17 +1164,6 @@ public class ChromatographySimulator extends Application {
                         a = Double.parseDouble(record.get("A"));
                         l = Double.parseDouble(record.get("L"));
 
-                        /*Chemical chemical = Chemical.builder()
-                                .casNumber(casNumber)
-                                .chemicalName(chemicalName)
-                                .molarResponseFactor(molarResponseFactor)
-                                .molecularWeight(molecularWeight)
-                                .overloadMass_1(overloadMass_1)
-                                .e(e)
-                                .s(s)
-                                .a(a)
-                                .l(l)
-                                .build();*/
                         Chemical chemical = new Chemical(casNumber,
                                 chemicalName,
                                 molarResponseFactor,
@@ -1343,7 +1192,7 @@ public class ChromatographySimulator extends Application {
 
         // YAxis -- Detector Line Chart
         final NumberAxis yAxisDetector = new NumberAxis(0.0,100.0,10.0);
-        yAxisDetector.setLabel("Signal (Peak Area Units)");
+        yAxisDetector.setLabel("Detector Signal (Relative Peak Area Units)");
         yAxisDetector.setAutoRanging(false);
         yAxisDetector.setTickLabelFormatter(new StringConverter<Number>() {
             @Override
@@ -1363,8 +1212,9 @@ public class ChromatographySimulator extends Application {
         lineChartDetector.setAnimated(false);
         lineChartDetector.legendVisibleProperty().set(false);
         lineChartDetector.setCenterShape(true);
-        lineChartDetector.setPadding(new Insets(20,40,10,0));
+        lineChartDetector.setPadding(new Insets(0,40,0,0));
         lineChartDetector.setPrefHeight(SCREEN_BOUNDS.getHeight()*0.75);
+        lineChartDetector.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.80);
 
         // DataSeries -- Detector Line Chart
         XYChart.Series<Number, Number> dataSeriesDetector = new XYChart.Series<>();
@@ -1378,6 +1228,7 @@ public class ChromatographySimulator extends Application {
 
         // YAxis -- Solute Bands Traversal Line Chart
         final NumberAxis yAxisSolBand = new NumberAxis(0.0,1,0);
+        yAxisSolBand.setLabel("Solute Bands");
         yAxisSolBand.setVisible(false);
         yAxisSolBand.setTickLabelsVisible(false);
 
@@ -1391,14 +1242,8 @@ public class ChromatographySimulator extends Application {
         lineChartSolBand.legendVisibleProperty().set(false);
         lineChartSolBand.setVerticalGridLinesVisible(false);
         lineChartSolBand.setPadding(new Insets(0,40,0,0));
-        lineChartSolBand.setPrefHeight(SCREEN_BOUNDS.getHeight()*0.15);
-        lineChartSolBand.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.65);
-
-        // Data Series -- Solute Bands Traversal Line Chart
-        XYChart.Series<Number, Number> dataSeriesSolBand = new XYChart.Series<>();
-        lineChartSolBand.getData().add(dataSeriesSolBand);
-//        dataSeriesSolBand.getNode().setStyle("-fx-stroke-width: 1; -fx-stroke: #1E90FF;");
-
+        lineChartSolBand.setMaxHeight(SCREEN_BOUNDS.getHeight()*0.15);
+        lineChartSolBand.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.80);
 
         // ROOT BORDERPANE
         root = new BorderPane();
@@ -1410,8 +1255,12 @@ public class ChromatographySimulator extends Application {
 
         VBox leftControls = new VBox(10);
           leftControls.setPadding(new Insets(10,20,10,30));
-        leftControls.setAlignment(Pos.CENTER);
-        root.setCenter(lineChartDetector);
+          leftControls.setAlignment(Pos.CENTER);
+        VBox centerDisplay = new VBox();
+          centerDisplay.setPadding(new Insets(10));
+          centerDisplay.setAlignment(Pos.CENTER_RIGHT);
+          centerDisplay.getChildren().addAll(lineChartSolBand,lineChartDetector);
+        root.setCenter(centerDisplay);
         root.setLeft(leftControls);
 
         // PAUSE/PLAY BUTTON
@@ -1444,11 +1293,14 @@ public class ChromatographySimulator extends Application {
         restartButton.setGraphic(restartIcon);
         restartButton.setPrefWidth(140);
         restartButton.setPrefHeight(45);
-//        restartButton.disableProperty().bind(isPaused);
         restartButton.setOnAction(e -> {
             Alert confirmRestart = new Alert(Alert.AlertType.CONFIRMATION);
             confirmRestart.getDialogPane().setPrefWidth(SCREEN_BOUNDS.getWidth()*0.20);
             confirmRestart.setHeaderText("Restart Simulation?");
+            Button okButton = (Button) confirmRestart.getDialogPane().lookupButton(ButtonType.OK);
+            Button cancelButton = (Button) confirmRestart.getDialogPane().lookupButton(ButtonType.CANCEL);
+            okButton.setDefaultButton(false);
+            cancelButton.setDefaultButton(true);
             Optional<ButtonType> choice = confirmRestart.showAndWait();
             if (choice.get().equals(ButtonType.OK)){
                 restartSimulation();
@@ -1465,7 +1317,7 @@ public class ChromatographySimulator extends Application {
                 System.out.print(String.format("%.1f", peak.getElutionTime()) + " eTime");
                 System.out.println();
                 System.out.println();
-//              System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
+              System.out.println(" ProportionTraversed = " + String.format("%.2f",peak.proportionOfColumnTraversed()));
             }
                 System.out.println("SIZE = " + MachineSettings.ANALYTES_IN_COLUMN.size());
                 System.out.println();
@@ -1657,6 +1509,12 @@ public class ChromatographySimulator extends Application {
             injectStage.initOwner(mainStage);
             injectStage.initModality(Modality.APPLICATION_MODAL);
             injectStage.setTitle("Injection");
+            // Ensure that concentrations return to 0 if injectStage closed unexpectedly
+            injectStage.setOnCloseRequest(e -> {
+                for (ChemicalView chemView : obsListChemicalViews){
+                    chemView.setConcentration(0.0);
+                }
+            });
 
             // CUSTOM SAMPLE MIXTURE PANE -- TABLEVIEW
                 // CUSTOM SAMPLE MIXTURE PANE -- SEARCH FILTERS
@@ -2031,18 +1889,33 @@ public class ChromatographySimulator extends Application {
                 // REMOVE SELECTED BUTTON
                 Button removeSelectedButton = new Button("Remove Selected");
                 removeSelectedButton.setOnAction(e->{
+                    // Remove them
                     ObservableList<ChemicalView> selectedInputs =
                             tableViewSetConcentrations
                                     .getSelectionModel()
                                     .getSelectedItems();
                     List<ChemicalView> toRemove = new ArrayList<>(selectedInputs);
+                    for (ChemicalView chemView : toRemove){
+                        chemView.setConcentration(0.0);
+                    }
                     chemicalViewsInSampleMixture.removeAll(toRemove);
+
+                    // Recalculate concentration inputs
+                        double sum = 0.0;
+                        for (ChemicalView chemView : filteredData8){
+                            sum += chemView.getConcentration().doubleValue();
+                        }
+                        concentrationInputsSum.set(sum);
                 });
 
                 // REMOVE ALL BUTTON
                 Button removeAllButton = new Button("Remove All");
                 removeAllButton.setOnAction(e->{
+                    for (ChemicalView chemView : chemicalViewsInSampleMixture){
+                        chemView.setConcentration(0.0);
+                    }
                     chemicalViewsInSampleMixture.clear();
+                    concentrationInputsSum.set(0);
                 });
 
                 // TIPS BUTTON
@@ -2206,8 +2079,65 @@ public class ChromatographySimulator extends Application {
             finalizeButton.setPadding(new Insets(10,50,10,50));
             BorderPane.setAlignment(finalizeButton, Pos.CENTER);
             SimpleBooleanProperty isFinalized = new SimpleBooleanProperty(finalizeButton,"isFinalized",false);
+            SimpleBooleanProperty soluteBandsOn = new SimpleBooleanProperty(true);
             finalizeButton.setDisable(true);
             finalizeButton.setOnAction(e3 -> {
+            // First, warn against potential performance issues with too many solute bands being initialized
+                // Count up how many total solute bands there will be after this injection
+                int sizeOfUserInputs = 0;
+                for(ChemicalView chemical : chemicalViewsInSampleMixture){
+                    if (chemical.getConcentration() == 0) continue;
+                    sizeOfUserInputs++;
+                }
+                int currentNumSoluteBands = peakToSolBandChangeListener.values().size();
+                int newTotalSoluteBands = sizeOfUserInputs + currentNumSoluteBands;
+
+                // Warn user if there is a potential issue but allow them to choose caution or safety
+                if (newTotalSoluteBands > 500 && finalizeButton.getText().equals("Finalize Sample")){
+                    Alert performanceWarning = new Alert(Alert.AlertType.WARNING);
+                    performanceWarning.getDialogPane().setPrefWidth(injectStage.getWidth()*0.51);
+                    performanceWarning.setHeaderText("Warning: Performance Issues Likely!");
+
+                    // Buttons in alert
+                    performanceWarning.getButtonTypes().add(ButtonType.APPLY);
+                    Button safeProceedButton = (Button) performanceWarning.getDialogPane().lookupButton(ButtonType.APPLY);
+                    safeProceedButton.setText("Safe: Solute Bands OFF");
+                    safeProceedButton.setWrapText(true);
+
+                    Button cautiousProceedButton = (Button) performanceWarning.getDialogPane().lookupButton(ButtonType.OK);
+                    cautiousProceedButton.setText("Caution: Solute Bands ON");
+                    cautiousProceedButton.setWrapText(true);
+
+                    performanceWarning.getButtonTypes().add(ButtonType.CANCEL);
+                    Button cancelButton = (Button) performanceWarning.getDialogPane().lookupButton(ButtonType.CANCEL);
+                    cancelButton.setText("Cancel");
+                    cancelButton.setWrapText(true);
+
+                    cautiousProceedButton.setDefaultButton(false);
+                    safeProceedButton.setDefaultButton(true);
+
+                    // Content of Alert
+                    Label content = new Label("Displaying "
+                            + (newTotalSoluteBands)
+                            + " solute bands may cause performance issues (aim for < 500)!"
+                            + "\nIf you TURN OFF solute bands, no performance issues will occur."
+                            + "\nUsing 1x or 2x simulation speed improves performance significantly."
+                            );
+                    content.setWrapText(true);
+                    content.setTextFill(Color.DODGERBLUE);
+                    content.setFont(Font.font(null, FontPosture.REGULAR, 12));
+                    content.setMaxWidth(injectStage.getWidth());
+                    performanceWarning.getDialogPane().setContent(content);
+
+                    // Handle user Choice inside Alert
+                    Optional<ButtonType> choice = performanceWarning.showAndWait();
+                    if (choice.get().equals(ButtonType.APPLY)){
+                        soluteBandsOn.set(false); // This will lead to solute bands being deleted and not initialized
+                    } if (choice.get().equals(ButtonType.CANCEL)){
+                        return;
+                    };
+                }
+
                 if(finalizeButton.getText().equals("Finalize Sample")){
                     finalizeButton.setText("Edit Sample");
                     setConcTitlePane.setDisable(!setConcTitlePane.isDisabled());
@@ -2224,6 +2154,8 @@ public class ChromatographySimulator extends Application {
                     addPresetsTitlePane.setDisable(!addPresetsTitlePane.isDisabled());
                     isFinalized.set(false);
                     oscillatorTranslator.stop();
+                    soluteBandsOn.set(true); // ensure true because user may have changed their mind; don't want to
+                                            // delete bands later undesirably
                     return;
                 }
             });
@@ -2254,21 +2186,35 @@ public class ChromatographySimulator extends Application {
                 allClearButton.disableProperty().bind(
                     concentrationInputsSum.greaterThan(100.0)
                     .or(techniqueScore.isEqualTo(0))
-                    .or(allClearClicked));
+                    .or(allClearClicked)); // used for disabling immediately to prevent double clicks
             allClearButton.setOnAction(e5 -> {
                 // disable the all clear button (no double clicks)
                 allClearClicked.set(true);
+
                 // Pause if its not paused
                 if (!isPaused.get()){
                     simulationStateButton.fire();
                 }
-                ArrayList<ChemicalView> finalUserInputs = new ArrayList<>();
-                for(ChemicalView chemical : chemicalViewsInSampleMixture){
-                    if (chemical.getConcentration() == 0) continue;
-                    finalUserInputs.add(chemical);
+
+                // Delete all the solute bands if user input indicates as much
+                if (!soluteBandsOn.get()){
+                    peakToSolBandChangeListener.clear();
+                    peakToSolBandDataSeries.clear();
+                    solBandDataSeriesToPeak.clear();
+                    lineChartSolBand.getData().clear();
+                    soluteBandCountProperty.set(0);
                 }
+
+                // Identify all chemicals the user actually input a concentration value for
+                for(ChemicalView chemicalView : chemicalViewsInSampleMixture){
+                    if (chemicalView.getConcentration() == 0) continue;
+                    else finalUserInputs_ChemViews.add(chemicalView);
+                }
+
+                // Initialize peaks for finalUserInputs (do computationally intensive parts as background task)
                 final Task<Void> initializePeaksTask = new Task<Void>() {
                     protected Void call() {
+                        List<Peak> finalUserInputs_Peaks = new ArrayList<>();
                         try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
                              CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
                                      "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
@@ -2296,21 +2242,22 @@ public class ChromatographySimulator extends Application {
                                 if (record.getRecordNumber() == 1) continue;
                                 chemicalNameOfRecord = record.get("chemicalName");
 
-                                for (ChemicalView input : finalUserInputs){
+                                // CSV Parser finds a chemicalName for each record; next, we iterate through
+                                // finalUserInputs and if finalUserInputs contains that chemicalName, we build a Peak
+                                // from that Chemical
+                                for (ChemicalView input : finalUserInputs_ChemViews) {
                                     chemicalNameOfInput = input.getName();
-                                    String casNumber = input.getCas();
-                                    if (!chemicalNameOfRecord.equals(chemicalNameOfInput)) continue;
+                                    if (!chemicalNameOfRecord.equals(chemicalNameOfInput)) continue; // no match? next
 
                                     // Construct analyte if it is not found in casToChemical top level hashmap
-                                    if (casToChemical.containsKey(casNumber)){
-                                        analyte = casToChemical.get(casNumber);
-                                    }else{
-                                        analyte = new Chemical(chemicalNameOfInput);
-                                    }
+                                    // (casToChemical finishes populating within 1-2s of application launch)
+                                    String casNumber = input.getCas();
+                                    if (casToChemical.containsKey(casNumber)) analyte = casToChemical.get(casNumber);
+                                    else analyte = new Chemical(chemicalNameOfInput);
 
                                     percentWeight = input.getConcentration()/100.0;
-                                    // percentWeight = %Weight of 1 uL injection (total weight assumed 1 mg / uL,
-                                    // densities NOT factored in)
+                                    // percentWeight = %Weight of 1 uL injection
+                                    // (total weight assumed 1 mg / uL; densities NOT factored in)
                                     mgAnalyteInjectedToInlet = percentWeight*MachineSettings.INJECTION_VOLUME;
                                     ngAnalyteEnteringColumn = mgAnalyteInjectedToInlet*1_000_000.0 / MachineSettings.SPLIT_RATIO;
                                     gAnalyteEnteringColumn = ngAnalyteEnteringColumn/1_000_000_000.0;
@@ -2318,65 +2265,91 @@ public class ChromatographySimulator extends Application {
                                     molesAnalyteEnteringColumn = (gAnalyteEnteringColumn/molecularWeightAnalyte);
                                     MRFAnalyte = analyte.molarResponseFactor();
 
+                                    // Define peak's characteristics
                                     peakArea = molesAnalyteEnteringColumn*MRFAnalyte*MRF_PROPORTIONALITY_CONST;
                                     injectionTime = currentTime();
                                     elutionTime = injectionTime+analyte.calcRetentionTime();
-
                                     columnAdjustedOverloadMass = analyte.adjustedOverloadMass();
+
+                                    // Adjust Peak Shape
                                     peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX;
                                     if (ngAnalyteEnteringColumn > columnAdjustedOverloadMass){
                                         peakFrontingIndex = Peak.IDEAL_PEAK_FRONTING_INDEX +
                                             (ngAnalyteEnteringColumn/columnAdjustedOverloadMass);
-                                    };
-                                    peakTailingIndex = Peak.IDEAL_PEAK_TAILING_INDEX;
-                                    if(MachineSettings.IS_COLUMN_CUT_POORLY){
-                                        peakTailingIndex = 2.1; // TODO: 5/3/2023 IMPLEMENT THIS WELL EVENTUALLY
+                                    }
+                                    peakTailingIndex = Peak.IDEAL_PEAK_TAILING_INDEX; // TODO: 5/30/2023
+                                    if (MachineSettings.IS_COLUMN_CUT_POORLY) {
+                                        peakTailingIndex = 4.1*Math.random(); // TODO: 5/3/2023 IMPLEMENT THIS WELL EVENTUALLY
                                     }
 
-                                    Peak currentPeak = new Peak.Builder(analyte,peakArea,injectionTime)
-                                            .ascendingCurve(peakArea,elutionTime, GaussianCurve.IDEAL_PEAK_SIGMA)
-                                            .descendingCurve(peakArea,elutionTime,GaussianCurve.IDEAL_PEAK_SIGMA)
+                                    // Build Peak
+                                    Peak currentPeak = new Peak.Builder(analyte, peakArea, injectionTime)
+                                            .ascendingCurve(peakArea, elutionTime, GaussianCurve.IDEAL_PEAK_SIGMA)
+                                            .descendingCurve(peakArea, elutionTime, GaussianCurve.IDEAL_PEAK_SIGMA)
                                             .peakFrontingIndex(peakFrontingIndex)
                                             .peakTailingIndex(peakTailingIndex)
                                             .build();
-                                        MachineSettings.ANALYTES_IN_COLUMN.add(currentPeak);
+                                    finalUserInputs_Peaks.add(currentPeak);
                                 }
                                 iterations++;
-                                updateProgress(iterations, finalUserInputs.size());
+                                updateProgress(iterations, finalUserInputs_ChemViews.size());
                             }
-
-                            // Create Solute Bands for Monitoring Progress inside Column Visually
-                            List<XYChart.Series<Number,Number>> listSoluteBandSeries = new ArrayList<>();
-                            for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
-                                    XYChart.Series<Number, Number> series = new XYChart.Series<>();
-                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 0));
-                                    series.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 1));
-
-                                    ChangeListener<Number> listener = (observable, oldValue, newValue) -> {
-                                        series.getData().get(0).setXValue(newValue);
-                                        series.getData().get(1).setXValue(newValue);
-                                    };
-
-                                    WeakChangeListener<Number> weakListener = new WeakChangeListener<>(listener);
-                                    peak.columnTraversedProperty().addListener(weakListener);
-
-                                // Store the strong reference to the listener (clear() later for easy Garbage Collection)
-                                colTravListeners.add(listener);
-                                listSoluteBandSeries.add(series);
-                            }
-                            // Add all solute band series into the lineChart on the JavaFX Application thread
-                            // to prevent concurrency issues
-                            Platform.runLater(() -> {
-                                lineChartSolBand.getData().addAll(listSoluteBandSeries);
-                            });
-                        } catch (IOException e) {
+                            // Add all userInputPeaks to Top-Level Field of Simulator
+                            MachineSettings.ANALYTES_IN_COLUMN.addAll(finalUserInputs_Peaks);
+                        } catch(IOException e){
                             throw new RuntimeException("Bro, your csv datafile is messed up", e);
                         }
 
-                        // After injection complete, reset all conc to 0
+                        // Create Solute Bands for Monitoring Progress inside Column Visually
+                        List<XYChart.Series<Number, Number>> listSoluteBandSeries = new ArrayList<>();
+                        for (Peak peak : finalUserInputs_Peaks) {
+                            if (soluteBandsOn.get()) { // Total solute bands recommended < 500 -- performance limit
+                                // Create data series (soluteBandView) made of 2 datapoints: one at y = 0 and the other
+                                // at y = 1 (this forms a vertical line that runs the entire height of the y-axis)
+                                XYChart.Series<Number, Number> soluteBandView = new XYChart.Series<>();
+                                soluteBandView.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 0));
+                                soluteBandView.getData().add(new XYChart.Data<>(peak.proportionOfColumnTraversed(), 1));
+
+                                // Listen for changes in value of columnTraversedProperty (DoubleProperty) and change
+                                // the x-values of both datapoints in the soluteBandView to be equal to the value of
+                                // the columnTraversalProperty (this moves the soluteBandView along the x-axis).
+                                ChangeListener<Number> listener = (observable, oldValue, newValue) -> {
+                                    soluteBandView.getData().get(0).setXValue(newValue);
+                                    soluteBandView.getData().get(1).setXValue(newValue);
+                                };
+                                WeakChangeListener<Number> weakListener = new WeakChangeListener<>(listener);
+                                peak.columnTraversedProperty().addListener(weakListener);
+
+                                // Store the strong reference to the weak listener in a structure where they can be found
+                                // and clear()'ed easily for garbage collection to avoid memory leaks
+                                peakToSolBandChangeListener.put(peak, listener);
+                                peakToSolBandDataSeries.put(peak,soluteBandView);
+                                solBandDataSeriesToPeak.put(soluteBandView,peak);
+                                listSoluteBandSeries.add(soluteBandView);
+                            }
+                        }
+                        // Add all solute band series into lineChart on JavaFX App thread to prevent concurrency issues
+                        Platform.runLater(() -> {
+                            lineChartSolBand.getData().addAll(listSoluteBandSeries);
+                            int currentCount = soluteBandCountProperty.get();
+                            soluteBandCountProperty.set(currentCount + listSoluteBandSeries.size());
+
+                            // OBLIGATE: Style of each series can ONLY be set after it has been added to its linechart.
+                            // Set Style: Each Solute Band is backed by a Chemical; that Chemical has a unique color
+                            for (XYChart.Series series : lineChartSolBand.getData()){
+                                Peak peak = solBandDataSeriesToPeak.get(series);
+                                Color chemicalColor = peak.analyte().hashColor();
+                                String hexadecimalColor = toHexString(chemicalColor);
+                                series.getNode().setStyle("-fx-stroke-width: 7; -fx-opacity: 0.65; " +
+                                        "-fx-stroke: " + hexadecimalColor + ";");
+                            }
+                        });
+
+                        // After injection complete, reset all conc to 0 and clear finalUserInputs
                         for (ChemicalView chemView : chemicalViewsInSampleMixture){
                             chemView.setConcentration(0.0);
                         }
+                        finalUserInputs_ChemViews.clear();
                         return null;
                     }
                 };
@@ -3024,6 +2997,15 @@ public class ChromatographySimulator extends Application {
 
                 Optional<Column> result = columnChoices.showAndWait();
                 if (result.isPresent()) {
+                    // Delete state of current column; restore to defaults
+                    peakToSolBandChangeListener.clear();
+                    peakToSolBandDataSeries.clear();
+                    solBandDataSeriesToPeak.clear();
+                    lineChartSolBand.getData().clear();
+                    soluteBandCountProperty.set(0);
+                    MachineSettings.ANALYTES_IN_COLUMN.clear();
+
+                    // Keep state of damage though... because... iono???
                     MachineSettings.columnToDamAndRem.put(MachineSettings.CURRENT_COLUMN,
                             new Double[]{MachineSettings.CURRENT_COLUMN_DAMAGE,
                                     MachineSettings.CURRENT_COLUMN_REMAINING});
@@ -3101,8 +3083,13 @@ public class ChromatographySimulator extends Application {
                                 // Update all the peaks and make them traverse the column
                                 for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                                     // Check if the peak is eluting; if it is, don't update it.
-                                    if (currentTime() >= (peak.getElutionTime()
-                                            - peak.ascendingCurve.calcWidthOfHalfCurve())) { // TODO: 5/26/2023 PROBLEM HERE WITH TRAVERSAL
+                                    if (peak.isEluting.get()) {
+                                        // Remove the solute band from the lineChart and remove pointer to its listener
+                                        // to ensure garbage collection
+                                        peakToSolBandChangeListener.remove(peak);
+                                        soluteBandCountProperty.set(peakToSolBandChangeListener.size());
+                                        XYChart.Series<Number,Number> soluteBandDataSeries = peakToSolBandDataSeries.get(peak);
+                                        lineChartSolBand.getData().remove(soluteBandDataSeries);
                                         continue;
                                     } else {
                                         peak.updatePeak();
@@ -3119,6 +3106,7 @@ public class ChromatographySimulator extends Application {
                                         peakIterator.remove();
                                     }
                                 }
+
 
                                 // Generate detector signal value (noise + peak detection)
                                 noise = MachineSettings.nextNoiseValue(
@@ -3241,6 +3229,7 @@ public class ChromatographySimulator extends Application {
                 clickDragRectangle.setVisible(true);
             }
         });
+
         // ACTION 2 -- DRAG MOUSE FOR SETTING WIDTH & HEIGHT OF ZOOMING RECTANGLE (GET maxX & minY)
         lineChartDetector.addEventHandler(MouseEvent.MOUSE_DRAGGED, e2 -> {
             // 205 pixels is area of LineChart that I don't want users to be able to click on
@@ -3325,34 +3314,46 @@ public class ChromatographySimulator extends Application {
             yAxisDetector.setTickUnit((int)(currentHighY/10.0));
         });
 
+        // CLEAR SOLUTE BANDS BUTTON
+        Button clearSoluteBandsButton = new Button();
+        clearSoluteBandsButton.setPrefWidth(140);
+        FontIcon clearIcon = FontIcon.of(FluentUiFilledAL.DELETE_FOREVER_24);
+        clearIcon.setIconColor(Color.BLACK);
+        clearIcon.setIconSize(25);
+        SimpleStringProperty colonClearSol = new SimpleStringProperty(": ");
+        clearSoluteBandsButton.setGraphic(clearIcon);
+        clearSoluteBandsButton.setFont(Font.font(null, FontWeight.EXTRA_BOLD, 20));
+        clearSoluteBandsButton.textProperty().bind(colonClearSol.concat(soluteBandCountProperty.asString()));
+        clearSoluteBandsButton.setOnAction(e -> {
+            Alert clearAlert = new Alert(Alert.AlertType.CONFIRMATION);
+            clearAlert.getDialogPane().setPrefWidth(SCREEN_BOUNDS.getWidth()*0.31);
+            clearAlert.setHeaderText("Clear All Solute Bands?");
+            Button okButton = (Button) clearAlert.getDialogPane().lookupButton(ButtonType.OK);
+            Button cancelButton = (Button) clearAlert.getDialogPane().lookupButton(ButtonType.CANCEL);
+            okButton.setDefaultButton(false);
+            cancelButton.setDefaultButton(true);
+            Label content = new Label("Tip: Clearing solute bands significantly improves application performance");
+            content.setWrapText(true);
+            content.setTextFill(Color.DODGERBLUE);
+            content.setFont(Font.font(null, FontPosture.ITALIC, 12));
+            content.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.31);
+            clearAlert.getDialogPane().setContent(content);
+            Optional<ButtonType> choice = clearAlert.showAndWait();
+            if (choice.get().equals(ButtonType.OK)){
+                solBandDataSeriesToPeak.clear();
+                peakToSolBandDataSeries.clear();
+                peakToSolBandChangeListener.clear();
+                lineChartSolBand.getData().clear();
+            };
+        });
+
+
+
         // UTILITY BUTTON
         Button utilityButton = new Button("utility");
         SimpleBooleanProperty toggleProp = new SimpleBooleanProperty(true);
         utilityButton.setOnAction(e->{
-
-            /*root.setBorder(new Border(
-                    new BorderStroke(
-                            Color.BLACK,
-                            BorderStrokeStyle.DASHED,
-                            CornerRadii.EMPTY,
-                            BorderStroke.THICK))
-            );*/
-
-            if (toggleProp.get()){
-                root.setCenter(new VBox(lineChartSolBand,lineChartDetector){
-                    {
-                        setAlignment(Pos.CENTER_RIGHT);
-                        setSpacing(0);
-                    }
-                });
-                toggleProp.set(false);
-                return;
-            }
-            if (!toggleProp.get()){
-                root.setCenter(lineChartDetector);
-                toggleProp.set(true);
-                return;
-            }
+            System.out.println("peakToSolBandChangeListener.values().size() = " + peakToSolBandChangeListener.values().size());
             /*System.out.println("casToChemical.size() = " + casToChemical.size());*/
            /* Runtime runtime = Runtime.getRuntime();
             long usedMemory = runtime.totalMemory() - runtime.freeMemory();
@@ -3386,12 +3387,15 @@ public class ChromatographySimulator extends Application {
         leftControls.getChildren().add(splitRatioButton);
         leftControls.getChildren().add(injectButton);
         leftControls.getChildren().add(simulationStateButton);
+        leftControls.getChildren().add(clearSoluteBandsButton);
         leftControls.getChildren().add(restartButton);
         leftControls.getChildren().add(createVSpacer());
 //        leftControls.getChildren().addAll(columnDamage,columnRem);
-        leftControls.getChildren().add(elutionTimesButton);
-        leftControls.getChildren().add(utilityButton);
+//        leftControls.getChildren().add(elutionTimesButton);
+//        leftControls.getChildren().add(utilityButton);
         leftControls.setAlignment(Pos.CENTER);
+
+
 
         showSplash(initStage);
 
@@ -3448,8 +3452,12 @@ public class ChromatographySimulator extends Application {
                     // Update all the peaks and make them traverse the column
                     for (Peak peak : MachineSettings.ANALYTES_IN_COLUMN) {
                         // Check if the peak is eluting; if it is, don't update it.
-                        if (currentTime() >= (peak.getElutionTime()
-                                - peak.ascendingCurve.calcWidthOfHalfCurve())) {
+                        if (peak.isEluting.get()) {
+                            // Remove the solute band from the lineChart and remove pointer to its listener
+                            // to ensure garbage collection
+                            peakToSolBandChangeListener.remove(peak);
+                            XYChart.Series<Number,Number> soluteBandDataSeries = peakToSolBandDataSeries.get(peak);
+                            lineChartSolBand.getData().remove(soluteBandDataSeries);
                             continue;
                         } else {
                             peak.updatePeak();
