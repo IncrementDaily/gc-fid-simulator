@@ -1067,8 +1067,8 @@ public class ChromatographySimulator extends Application {
                 fadeSplash.setToValue(0.0);
                 fadeSplash.play();
                 fadeSplash.setOnFinished(actionEvent -> {
-                    launchButton.sceneProperty().get().getWindow().hide();
                     showMainStage(root);
+                    launchButton.sceneProperty().get().getWindow().hide();
                 });
             });
         FadeTransition ftLaunch = new FadeTransition(Duration.millis(2500), launchButton);
@@ -1355,8 +1355,11 @@ public class ChromatographySimulator extends Application {
         thermometer3.setIconSize(30);
         thermometer4.setIconColor(Color.CRIMSON);
         thermometer4.setIconSize(30);
-        Button setOvenTempButton = new Button("");
+        Button setOvenTempButton = new Button();
         setOvenTempButton.setGraphic(thermometer0);
+        setOvenTempButton.setFont(Font.font(null, FontWeight.EXTRA_BOLD, 20));
+        SimpleStringProperty colonSetOvenTemp = new SimpleStringProperty(" : ");
+        setOvenTempButton.textProperty().bind(colonSetOvenTemp.concat(MachineSettings.ovenTempProperty.asString("%.0f")));
         MachineSettings.ovenTempProperty.addListener(e -> {
             if (MachineSettings.ovenTempProperty.doubleValue() >= 330.0) {setOvenTempButton.setGraphic(thermometer4); return;}
             if (MachineSettings.ovenTempProperty.doubleValue() >= 280.0) {setOvenTempButton.setGraphic(thermometer3); return;}
@@ -1380,20 +1383,13 @@ public class ChromatographySimulator extends Application {
                 validationLabel.setVisible(false);
                 SimpleDoubleProperty validNumber = new SimpleDoubleProperty(inputField, "inputValue");
 
-                Label currentTempMarker = new Label("Current Temperature: ");
-                currentTempMarker.setFont(Font.font(null, FontWeight.BOLD, 10));
-                Label currentTempVal = new Label();
-                currentTempVal.setFont(Font.font(null, FontWeight.BOLD, 10));
-                currentTempVal.textProperty().bind(MachineSettings.ovenTempProperty.asString("%.0f"));
-                HBox currentTemp = new HBox(currentTempMarker,currentTempVal);
-
                 Label info = new Label("Tip: The oven temperature(s) you select for your method are of primary importance for ensuring good separation of peaks. Low temperatures cause chemicals to spend more time in the column. High temperatures speed them through. The selectivity parameters of your columns change with temperature as well. Play around!");
                 info.setWrapText(true);
                 info.setTextFill(Color.DODGERBLUE);
                 info.setFont(Font.font(null, FontPosture.ITALIC, 14));
                 info.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.30);
 
-                inputDialog.getDialogPane().setContent(new VBox(2, validationLabel, currentTemp, inputField, info));
+                inputDialog.getDialogPane().setContent(new VBox(2, validationLabel, inputField, info));
 
                 // Input Validation
                 inputField.textProperty().addListener((observable, oldValue, newValue) -> {
@@ -1446,7 +1442,7 @@ public class ChromatographySimulator extends Application {
         Button splitRatioButton = new Button();
         splitRatioButton.setGraphic(splitRatio);
         splitRatioButton.setFont(Font.font(null, FontWeight.EXTRA_BOLD, 20));
-        SimpleStringProperty colon = new SimpleStringProperty(": ");
+        SimpleStringProperty colon = new SimpleStringProperty(" : ");
         splitRatioButton.textProperty().bind(colon.concat(MachineSettings.splitRatioProperty.asString("%.0f")));
         splitRatioButton.setPrefWidth(140);
         splitRatioButton.setPrefHeight(45);
@@ -3313,7 +3309,7 @@ public class ChromatographySimulator extends Application {
         FontIcon clearIcon = FontIcon.of(FluentUiFilledAL.DELETE_FOREVER_24);
         clearIcon.setIconColor(Color.BLACK);
         clearIcon.setIconSize(25);
-        SimpleStringProperty colonClearSol = new SimpleStringProperty(": ");
+        SimpleStringProperty colonClearSol = new SimpleStringProperty(" : ");
         clearSoluteBandsButton.setGraphic(clearIcon);
         clearSoluteBandsButton.setFont(Font.font(null, FontWeight.EXTRA_BOLD, 20));
         clearSoluteBandsButton.textProperty().bind(colonClearSol.concat(soluteBandCountProperty.asString()));
