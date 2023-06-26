@@ -62,25 +62,23 @@ import java.util.stream.DoubleStream;
 import static javafx.beans.binding.Bindings.bindContent;
 
 public class ChromatographySimulator extends Application {
-// TOP-LEVEL FIELDS // TODO: 4/11/2023 For "FAST-TRAVELING" through a simulation, if the retention times of a given peak are a long time off
-                    // TODO: 4/11/2023 then allow the user to "fast-forward" until the next peak will elute (do this by advancing the currentTime until
-                    // TODO: 4/11/2023 currentTime = Math.max(nextRetentionTime - 5 seconds, currentTime());
-    // DATA
+// TOP-LEVEL FIELDS
+    // DATA FIELDS
     private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/ufz_LSERdataset.csv";
     private static int CHEM_DATA_SIZE = 0;
     private static final double MRF_PROPORTIONALITY_CONST = 5.952e11;
 
-    // INTERNAL CLOCK OF SIMULATION
+    // INTERNAL CLOCK OF SIMULATION FIELDS
     private static Timer simulationTimer = new Timer();
     private static AtomicInteger FRAME_LENGTH_MS = new AtomicInteger(50); // 50 milliseconds per frame
     private static final double FRAME_LENGTH_S = 0.05; // 0.05 seconds per frame
     private static double CURRENT_TIME = 0.0;  // elapsedTime in seconds
     private static SimpleBooleanProperty isPaused = new SimpleBooleanProperty(true);
 
-    // SPLASH SCREEN
+    // SPLASH SCREEN FIELDS
     private StackPane splashScreenPane = new StackPane();
 
-    // MAIN SCREEN
+    // MAIN SCREEN FIELDS
     private Stage mainStage;
     private static final Screen SCREEN = Screen.getPrimary();
     private static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
@@ -90,45 +88,21 @@ public class ChromatographySimulator extends Application {
     private static Map<XYChart.Series, Peak> solBandDataSeriesToPeak = new ConcurrentHashMap<>(512);
     private static SimpleIntegerProperty soluteBandCountProperty = new SimpleIntegerProperty(0);
 
-    // MAIN SCENE
+    // MAIN SCENE FIELDS
     private static Scene mainScene;
     private BorderPane root;
 
-    // INJECT SCENE
+    // INJECT SCENE FIELDS
     private static final double PARETO_SCALE = 1.0;
     private static final double PARETO_SHAPE = 2.5;
     private static ObservableList<ChemicalView> obsListChemicalViews = FXCollections.observableArrayList();
     // 8192 initial capacity (4212 unique Chemicals / 0.75 load factor = 5616; 2**12 = 4096, 2**13 = 8192)
     private static ConcurrentHashMap<String,Chemical> casToChemical = new ConcurrentHashMap<>(8192);
     ArrayList<ChemicalView> finalUserInputs_ChemViews = new ArrayList<>();
-    private static double paretoDouble(double scale, double shape) {
-        Random rand = new Random();
-        double u = rand.nextDouble();
-        return scale / Math.pow(u, 1.0 / shape);
-    }
-    public static List<Double> generateParetoList(int size/*, double scale, double shape*/, double distributionSum) {
-        if (size <= 0 || distributionSum <= 0) return null;
-        double scale = PARETO_SCALE;
-        double shape = PARETO_SHAPE;
-        List<Double> list = new ArrayList<>();
-        double initialDistributionSum = 0.0;
 
-        for (int i = 0; i < size; i++) {
-            double value = paretoDouble(scale, shape);
-            list.add(value);
-            initialDistributionSum += value;
-        }
-
-        // Normalize the list so that its final sum approximately equals the parameter: distributionSum
-        double factor = distributionSum / initialDistributionSum;
-        for (int i = 0; i < size; i++) {
-            list.set(i, list.get(i) * factor);
-        }
-        return list;
-    }
 
 // TOP-LEVEL STATIC METHODS
-    // INTERNAL CLOCK OF SIMULATION
+    // INTERNAL CLOCK OF SIMULATION STATIC METHODS
     protected static double currentTime(){
         return CURRENT_TIME;
     }
@@ -168,7 +142,7 @@ public class ChromatographySimulator extends Application {
         MachineSettings.isDetectorOn.set(true);
     }
 
-    // UI
+    // UI STATIC METHODS
     private static Region createVSpacer() {
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
@@ -198,7 +172,6 @@ public class ChromatographySimulator extends Application {
     }
 
 // TOP-LEVEL STATIC MEMBER CLASSES
-    // TODO: 4/17/2023 WILL HOLD CARRIER GAS VELOCITY CONSTANT AT 40 cm/s ... PERHAPS IN FUTURE THIS COULD BE ADJUSTABLE
     protected static class MachineSettings{
         // PEAK & COLUMN FIELDS
         private static TreeSet<Peak> ANALYTES_IN_COLUMN = new TreeSet<>();
@@ -311,6 +284,9 @@ public class ChromatographySimulator extends Application {
         }
 
     }
+
+
+
     private static enum Column{
         SPB_OCTYL("SPB-Octyl",
                 260,
@@ -463,6 +439,7 @@ public class ChromatographySimulator extends Application {
 
         // Min and Max HoldUpTime's for each column calculated by reztek EZGC calculator (see ReadMe)
         // This method returns holdUpTime linearly interpolated between min and max holduptime based on temp
+        // HoldUpTime is used in the calculation of retentionTime (see retention time methods)
         public double holdUpTime(double ovenTemperature){
             // Interpolate holdUpTime by temp
             double ratio = (ovenTemperature - MachineSettings.OVEN_TEMPERATURE_MIN) /
@@ -490,29 +467,12 @@ public class ChromatographySimulator extends Application {
         public double lengthMeters(){
             return columnLength;
         }
-        // VAN DEEMTER SIMULATION // TODO: 4/5/2023 FIND A BETTER SCIENTIFIC RATIONALE FOR THIS?
-        // TODO: 4/5/2023 ALLOW FOR ADJUSTMENT OF THIS TOO LOW TO CAUSE GENERAL PEAK BROADENING (B TERM TOO HIGH
-        // // TODO: 4/5/2023 AND ADJUSTMENT OF THIS TOO LOW TO CAUSE GENERAL PEAK CONVOLUTION (SQUISHIFY THE RETENTION TIMES TO BE CLOSER TO EACH OTHER
-        // Height Equivalent Theoretical Plates in mm. Column length / HETP = number Of theoretical plates
-        private static double hetpInMillimeters() {
-            // A, B, and C were picked somewhat arbitrarily: they are taken from one example
-            // of a plausible Van Deemter Plot for Helium Carrier Gas found on wikipedia
-            double A = 1.5; // Eddy Diffusion term (Experimentally derived)
-            double B = 25; // Longitudinal Diffusion term (Experimentally derived)
-            double C = 0.025; // Resistance To Mass Transfer Term (Experimentally Derived)
-
-            return A + (B / MachineSettings.HE_GAS_LINEAR_VELOCITY) + (C * MachineSettings.HE_GAS_LINEAR_VELOCITY);
-        }
-        // Number of Theoretical Plates of the current column is related to resolving/separating power.
-        // More plates = more resolution/more separation.
-        public double numTheoreticalPlates(){
-            return ((lengthMeters() * 1000) / hetpInMillimeters());
-        }
         public String toString(){
             return name;
         }
-
     }
+
+
     private static class Chemical{
         private String casNumber;
         private String chemicalName;
@@ -570,31 +530,8 @@ public class ChromatographySimulator extends Application {
             this.l = l;
         }
 
-        private Chemical(int negativeOne){
-            try (FileReader fileReader = new FileReader(CHEM_DATA_FILEPATH);
-                 CSVParser parser = CSVFormat.DEFAULT.builder().setHeader(
-                         "CAS","chemicalName","SMILES","label","MRF","molecularWeight",
-                         "overloadMass_1", "E","S","A","L").build().parse(fileReader)) {
-                for (CSVRecord record : parser) {
-                    if (record.getRecordNumber() > 100) break;
-                }
-            }catch(Exception e){
-            }
-
-            this.casNumber = "-1";
-            this.chemicalName = "-1";
-            this.molarResponseFactor = -1;
-            this.molecularWeight = -1;
-            this.overloadMass_1 = -1;
-            this.e = -1;
-            this.s = -1;
-            this.a = -1;
-            this.l = -1;
-        }
-        private static Chemical nullChem(){
-            return new Chemical (-1);
-        }
-
+        // Retention Factor is recalculated every 10-50 ms for every peak in the ANALYTES_ON_COLUMN set
+        // Retention Factor yields retention time which yields elution time: when the peak will reach the detector.
         private double calcRetentionFactor(){
             double logk = e* MachineSettings.CURRENT_COLUMN.E(MachineSettings.OVEN_TEMPERATURE)
                     + s* MachineSettings.CURRENT_COLUMN.S(MachineSettings.OVEN_TEMPERATURE)
@@ -604,13 +541,14 @@ public class ChromatographySimulator extends Application {
             double k = Math.pow(10.0,logk);
             return k;
         }
+
         private double calcRetentionTime(){
             double currentHoldUpTime = MachineSettings.CURRENT_COLUMN.holdUpTime(MachineSettings.getOvenTemperature());
             double retentionFactor = calcRetentionFactor();
             double retentionTime = currentHoldUpTime + (currentHoldUpTime*retentionFactor);
             return retentionTime;
         }
-        // See README regarding calculating overloadMass
+        // See README regarding calculating overloadMass for explanation
         private double adjustedOverloadMass(){
             if (MachineSettings.CURRENT_COLUMN.filmThickness == 1.0) return overloadMass_1;
             else if (MachineSettings.CURRENT_COLUMN.filmThickness >= 0.5) return overloadMass_1/2;
@@ -637,6 +575,7 @@ public class ChromatographySimulator extends Application {
             result = 31 * result + casNumber.hashCode();
             return result;
         }
+        // Provide each chemical with a unique color in the UI
         public Color hashColor(){
             double r = Math.abs(chemicalName.hashCode()%100.0/100.0);
             double g = Math.abs(casNumber.hashCode()%100.0/100.0);
@@ -649,6 +588,8 @@ public class ChromatographySimulator extends Application {
     		return chemicalName;
         }
     }
+
+
     private static class ChemicalView implements Comparable<ChemicalView> {
         private final String casNumber;
         private final SimpleStringProperty chemicalName;
@@ -687,7 +628,7 @@ public class ChromatographySimulator extends Application {
         public void setConcentration(Double newValue) {
             concentration.set(newValue);
         }
-       /* */@Override
+        @Override
         public boolean equals(Object o){
             if (this == o) return true;
             if (!(o instanceof ChemicalView)) return false;
@@ -713,16 +654,18 @@ public class ChromatographySimulator extends Application {
             return chemicalName.getValue();
         }
     }
+
+
     private static class Peak implements Comparable<Peak> {
         private final Chemical analyte;
-        private final double peakArea;
+        private final double peakArea; // recalculated using
         private final double injectionTime;
         private double proportionOfColumnTraversed = 0.0; // Range from 0.0 to 1.0;
         private SimpleDoubleProperty columnTraversedProperty = new SimpleDoubleProperty(0.0);
         private volatile AtomicBoolean isEluting = new AtomicBoolean(false);
         private double elutionTime;
-        private GaussianCurve ascendingCurve;
-        private GaussianCurve descendingCurve;
+        private GaussianCurve ascendingCurve; // Gaussian curve which draws the ascending half of the peak
+        private GaussianCurve descendingCurve; // Gaussian curve which draws the descending half of the peak
         private static final double IDEAL_PEAK_BROADENING_INDEX = 1.0;
         private static final double IDEAL_PEAK_FRONTING_INDEX = 1.0;
         private static final double IDEAL_PEAK_TAILING_INDEX = 1.0;
@@ -730,8 +673,8 @@ public class ChromatographySimulator extends Application {
         private double peakFrontingIndex = 1.0;
         private double peakBroadeningIndex = 1.0;
         private static final double PEAK_BROAD_COEFF = 0.022;// Arbitrarily pegged to a value of peak
-                                                                        // broadening that looked reasonable for a peak
-                                                                    // that spent 20 minutes diffusing through column
+                                                            // broadening that looked reasonable for a peak
+                                                            // that spent 20 minutes diffusing through column
 
         private static class Builder{
         // Required Parameters
@@ -739,15 +682,13 @@ public class ChromatographySimulator extends Application {
             private final Chemical analyte;
             private final double peakArea;
             private final double injectionTime;
-            // Mutable
+            // Mutable (shape can change)
             private GaussianCurve ascendingCurve;
             private GaussianCurve descendingCurve;
             // Curve-shape modulators
             private double peakTailingIndex = 1.0;
             private double peakFrontingIndex = 1.0;
             private double peakBroadeningIndex = 1.0;
-            // Implement these indices so that each peak's degree of peak tailing, fronting,
-            // or symmetric broadening depends on the factors according to the README.txt
 
             public Builder(Chemical analyte, double peakArea, double injectionTime){
                 this.analyte = analyte;
@@ -755,15 +696,15 @@ public class ChromatographySimulator extends Application {
                 this.injectionTime = injectionTime;
             }
             private Builder ascendingCurve(double amplitude, double timeOfMaxResponse, double peakFrontingIndex)
-                        {this.ascendingCurve = new GaussianCurve(amplitude, timeOfMaxResponse, peakFrontingIndex); return this;}
+                {this.ascendingCurve = new GaussianCurve(amplitude, timeOfMaxResponse, peakFrontingIndex); return this;}
             private Builder descendingCurve(double amplitude, double timeOfMaxResponse, double peakTailingIndex)
-                        {this.descendingCurve = new GaussianCurve(amplitude, timeOfMaxResponse, peakTailingIndex); return this;}
+                {this.descendingCurve = new GaussianCurve(amplitude, timeOfMaxResponse, peakTailingIndex); return this;}
             private Builder peakTailingIndex(double peakTailingIndex)
-                        {this.peakTailingIndex = peakTailingIndex;                      return this;}
+                {this.peakTailingIndex = peakTailingIndex;                                                 return this;}
             private Builder peakFrontingIndex(double peakFrontingIndex)
-                        {this.peakFrontingIndex = peakFrontingIndex;                    return this;}
+                {this.peakFrontingIndex = peakFrontingIndex;                                               return this;}
             private Builder peakBroadeningIndex(double peakBroadeningIndex)
-                        {this.peakBroadeningIndex = peakBroadeningIndex;                return this;}
+                {this.peakBroadeningIndex = peakBroadeningIndex;                                           return this;}
             private Peak build(){
                 return new Peak(this);
             }
@@ -780,20 +721,26 @@ public class ChromatographySimulator extends Application {
             elutionTime = builder.analyte.calcRetentionTime() + injectionTime;
         }
 
+        // GETTERS & SETTERS
         public double getColumnTraversed() {
             return columnTraversedProperty.get();
         }
-
         public DoubleProperty columnTraversedProperty() {
             return columnTraversedProperty;
         }
-
+        public double getElutionTime() {
+            return elutionTime;
+        }
         public void setColumnTraversed(double proportionOfColumnTraversed) {
             this.columnTraversedProperty.set(proportionOfColumnTraversed);
         }
+        public Chemical analyte(){
+            return analyte;
+        }
 
-        // Math.max() method ensures that the updated retentionTime will not be LESS than currentTime()
-        // otherwise the peak would not plot correctly. The updated retentionTime will be 3 frames after the currentTime().
+    // BEGIN : UPDATE PEAK METHODS-GROUP
+        // called on every peak in ANALYTES_ON_COLUMN every 10-50 ms to recalculate the new elutionTime
+        // (when the peak will hit the detector) and to change the shape of the peak if necessary
         private void updatePeak(){
             // Update Elution Time
             elutionTime = calcElutionTime();
@@ -801,13 +748,38 @@ public class ChromatographySimulator extends Application {
             // Update Peak Shape
             updatePeakShape();
         }
-        private void traverseColumn(){ // called every time run() is called
+        public void updateAmplitudes(double peakArea, GaussianCurve ascendingCurve, GaussianCurve descendingCurve){
+            double sharedAmplitude = GaussianCurve.sharedAmplitude(peakArea, ascendingCurve, descendingCurve);
+            ascendingCurve.amplitude = sharedAmplitude;
+            descendingCurve.amplitude = sharedAmplitude;
+        }
+        public void updatePeakShape(){
+            // Update peak widths based on circumstances
+            if (MachineSettings.TEMP_COOLING.get()) peakTailingIndex += 0.001;
+            peakBroadeningIndex = IDEAL_PEAK_BROADENING_INDEX + analyte.calcRetentionTime()* PEAK_BROAD_COEFF;
+            peakBroadeningIndex += MachineSettings.CURRENT_COLUMN_DAMAGE*(Math.random()*5.0); // non-deterministic behavior if column damaged
+            ascendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakFrontingIndex*peakBroadeningIndex);
+            descendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakTailingIndex*peakBroadeningIndex);
+
+            // Maintain same peak amplitude, while continuing to sum to correct peakArea
+            updateAmplitudes(peakArea, ascendingCurve, descendingCurve);
+
+            // Maintain equal elutionTime
+            ascendingCurve.mu = elutionTime;
+            descendingCurve.mu = elutionTime;
+        }
+    // END : UPDATE PEAK METHODS-GROUP
+
+    // BEGIN : TRAVERSAL / ELUTION TIME METHODS GROUP
+        // called every 10-50 ms to advance the peak down the column (change the value of proportionOfColumnTraversed)
+        private void traverseColumn(){
             if (isEluting.get()) {
                 return;
             }
             proportionOfColumnTraversed = Math.min(proportionOfColumnTraversed
                     + traversalProgressPerSimulationStep() , 1.0);
-            columnTraversedProperty.set(proportionOfColumnTraversed*100);
+            columnTraversedProperty.set(proportionOfColumnTraversed*100); // Binding these two values together ensures
+                                                                            // ensures that solute bands move in the UI
             if (proportionOfColumnTraversed == 1.0) isEluting.set(true);
         }
         private double traversalProgressPerSimulationStep(){
@@ -832,34 +804,9 @@ public class ChromatographySimulator extends Application {
             elutionTime = currentTime() + secondsRemainingUntilPeakElutes();
             return elutionTime;
         }
+    // END : TRAVERSAL / ELUTION TIME METHODS GROUP
 
-        public double getElutionTime() {
-            return elutionTime;
-        }
-        public Chemical analyte(){
-            return analyte;
-        }
-        public void updateAmplitudes(double peakArea, GaussianCurve ascendingCurve, GaussianCurve descendingCurve){
-            double sharedAmplitude = GaussianCurve.sharedAmplitude(peakArea, ascendingCurve, descendingCurve);
-            ascendingCurve.amplitude = sharedAmplitude;
-            descendingCurve.amplitude = sharedAmplitude;
-        }
-        public void updatePeakShape(){
-            // Update peak widths based on circumstances
-            if (MachineSettings.TEMP_COOLING.get()) peakTailingIndex += 0.001;
-            peakBroadeningIndex = IDEAL_PEAK_BROADENING_INDEX + analyte.calcRetentionTime()* PEAK_BROAD_COEFF;
-            peakBroadeningIndex += MachineSettings.CURRENT_COLUMN_DAMAGE*(Math.random()*5.0); // non-deterministic behavior if column damaged
-            ascendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakFrontingIndex*peakBroadeningIndex);
-            descendingCurve.sigma = GaussianCurve.IDEAL_PEAK_SIGMA*(peakTailingIndex*peakBroadeningIndex);
-
-
-            // Maintain same peak amplitude, while continuing to sum to correct peakArea
-            updateAmplitudes(peakArea, ascendingCurve, descendingCurve);
-
-            // Maintain equal elutionTime
-            ascendingCurve.mu = elutionTime;
-            descendingCurve.mu = elutionTime;
-        }
+        // Method which draws each peak in the UI line graph
         public double plot() {
             if (currentTime() <= elutionTime){
                 return ascendingCurve.apply(currentTime());
@@ -867,6 +814,7 @@ public class ChromatographySimulator extends Application {
                 return descendingCurve.apply(currentTime());
             }
         }
+        @Override
         public int compareTo(Peak otherPeak){
             int result = Double.compare(getElutionTime(), otherPeak.getElutionTime());
             if (result == 0) result = Double.compare(peakArea, otherPeak.peakArea);
@@ -890,9 +838,11 @@ public class ChromatographySimulator extends Application {
         }
 
         public String toString(){
-            return analyte.toString() /*+ " " + String.valueOf(peakArea) + " " + String.valueOf(elutionTime)*/;
+            return analyte.toString();
         }
     }
+
+
     private static class GaussianCurve implements Function<Double, Double> {
         static final double IDEAL_PEAK_SIGMA = 0.1;
         private double amplitude;
@@ -926,6 +876,8 @@ public class ChromatographySimulator extends Application {
                 return amplitude * Math.exp(exponent);
             }
 
+            // This method and sharedAmplitude() are used for reshaping peak due to broadening/fronting/tailing
+            // PeakArea is held constant despite changing shape
             public double calcWidthOfHalfCurve() {
                 double scaleY = amplitude * 0.001; // corresponds to 0.1% of peak amplitude
 
@@ -935,17 +887,18 @@ public class ChromatographySimulator extends Application {
 
                 return halfWidth;
             }
-
             public static double sharedAmplitude(double asymmetricPeakArea, GaussianCurve ascending, GaussianCurve descending){
                 return asymmetricPeakArea / (0.5 * Math.sqrt(2*Math.PI)
                         * (ascending.sigma + descending.sigma));
             }
         }
 
-    // UI-MANAGEMENT METHODS & INTERFACES
+
+// UI-MANAGEMENT METHODS & INTERFACES
     public interface InitCompletionHandler {
         void complete();
     }
+    // init() run only once at beginning of application launch -- loads splash screen
     @Override
     public void init() {
         // SPLASH SCREEN OBJECTS FOR LOADING
@@ -1034,6 +987,7 @@ public class ChromatographySimulator extends Application {
         VBox launch = new VBox();
         launch.setAlignment(Pos.CENTER);
 
+        // launch Button
         Button launchButton = new Button();
         launchButton.setBackground(new Background(
                  new BackgroundFill(Color.web("#ffaf00")
@@ -1056,6 +1010,8 @@ public class ChromatographySimulator extends Application {
                                 ,new CornerRadii(30)
                                 ,Insets.EMPTY)));
             });
+
+            // LAUNCH BUTTON
             launchButton.setOnAction(e -> {
                 RotateTransition rtPermanent = new RotateTransition(Duration.millis(190), travisHead);
                 rtPermanent.setByAngle(360);
@@ -1067,7 +1023,7 @@ public class ChromatographySimulator extends Application {
                 fadeSplash.setToValue(0.0);
                 fadeSplash.play();
                 fadeSplash.setOnFinished(actionEvent -> {
-                    showMainStage(root);
+                    showMainStage(root); // Leave splash screen and show main stage
                     launchButton.sceneProperty().get().getWindow().hide();
                 });
             });
@@ -1086,8 +1042,11 @@ public class ChromatographySimulator extends Application {
         launch.getChildren().add(launchButton);
         launchPane.getChildren().add(launch);
 
+        // Place background, travis, wave, title, and launch button into scene
         splashScreenPane.getChildren().addAll(backgroundScatter,travisHeadPane, wavePane, titlePane, launchPane);
     }
+
+    // This method called when launch button clicked
     private void showMainStage(Parent root) {
         mainStage = new Stage(StageStyle.DECORATED);
         mainStage.setTitle("Gas Chromatography Simulator");
@@ -1097,6 +1056,8 @@ public class ChromatographySimulator extends Application {
         mainStage.show();
         lineChartSolBand.requestFocus(); // remove focus from clear solute bands button at startup
     }
+
+    // This method called in start() method (which runs after init()) and shows splash screen
     private void showSplash(Stage initStage) {
         Scene splashScene = new Scene(splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
         initStage.setMaximized(true);
@@ -1104,9 +1065,13 @@ public class ChromatographySimulator extends Application {
         initStage.initStyle(StageStyle.DECORATED);
         initStage.show();
     }
+
+    // Start() method is a centrally important method of JavaFX framework and is called after init() completes.
+    // Background tasks are initialized and started first, then rest of the UI components are constructed and placed in
+    // the main stage which is what the user sees. UI application thread will begin.
     @Override
     public void start(Stage initStage) {
-        // BACKGROUND TASK -- Load All ChemicalViews in background so that user can launch application immediately
+        // BACKGROUND TASK 1 -- Load All ChemicalViews in background so that user can launch application immediately
         final Task<Void> chemViewLoadingTask = new Task<Void>() {
             @Override
             protected Void call() {
@@ -1138,7 +1103,8 @@ public class ChromatographySimulator extends Application {
         };
         new Thread(chemViewLoadingTask).start();
 
-        // BACKGROUND TASK -- Cache all Chemical objects to optimize performance of constructing Peak objects
+        // BACKGROUND TASK 2 -- Cache all Chemical objects to optimize performance of constructing Peak objects during
+        // normal application useage
         final Task<Void> chemicalLoadingTask = new Task<Void>() {
             @Override
             protected Void call() {
@@ -1185,6 +1151,8 @@ public class ChromatographySimulator extends Application {
         };
         new Thread(chemicalLoadingTask).start();
 
+// UI COMPONENTS
+
     // DETECTOR LINE CHART
         // XAxis -- Detector Line Chart
         final NumberAxis xAxisDetector = new NumberAxis(0.0,100.0,10.0);
@@ -1226,7 +1194,6 @@ public class ChromatographySimulator extends Application {
     // SOLUTE BANDS TRAVERSAL LINE CHART
         // XAxis -- Solute Bands Traversal Line Chart
         final NumberAxis xAxisSolBand = new NumberAxis(0.0,100,10);
-//        xAxisSolBand.setLabel("Column Length Traversed (%)");
 
         // YAxis -- Solute Bands Traversal Line Chart
         final NumberAxis yAxisSolBand = new NumberAxis(0.0,1,0);
@@ -1247,7 +1214,7 @@ public class ChromatographySimulator extends Application {
         lineChartSolBand.setMaxHeight(SCREEN_BOUNDS.getHeight()*0.15);
         lineChartSolBand.setMaxWidth(SCREEN_BOUNDS.getWidth()*0.80);
 
-        // ROOT BORDERPANE
+        // ROOT BORDERPANE -- All other UI elements contained inside this element
         root = new BorderPane();
           BackgroundFill backgroundFill = new BackgroundFill(
             Color.FLORALWHITE,
@@ -1493,6 +1460,9 @@ public class ChromatographySimulator extends Application {
                     });
                 });
             });
+
+    // BEGIN INJECT STAGE COMPONENT
+    // BEGIN INJECT STAGE COMPONENT
 
         // INJECT BUTTON
         FontIcon needle = FontIcon.of(MaterialDesign.MDI_NEEDLE);
@@ -2419,6 +2389,10 @@ public class ChromatographySimulator extends Application {
             injectStage.show();
         });
 
+    // END INJECT STAGE COMPONENT
+    // END INJECT STAGE COMPONENT
+
+
         // DETECTOR-OFF BUTTON
         Button detectorOnOffButton = new Button();
         FontIcon fire = FontIcon.of(FontAwesome.FIRE);
@@ -3008,7 +2982,6 @@ public class ChromatographySimulator extends Application {
         });
 
 
-
         // FAST-FORWARD BUTTON
         Button fastForwardButton = new Button();
         FontIcon fastForward = FontIcon.of(FluentUiFilledAL.FAST_FORWARD_24);
@@ -3025,6 +2998,8 @@ public class ChromatographySimulator extends Application {
             int speedIndex = (newFrameRate/10)-1;
             fastForwardButton.setText(speeds.get(speedIndex));
             FRAME_LENGTH_MS.set(newFrameRate);
+
+            // To change period of simulationTimer, old Timer must be cancelled, entirely new TimerTask() must be called
             simulationTimer.cancel();
             simulationTimer = new Timer();
             simulationTimer.schedule(
@@ -3048,9 +3023,6 @@ public class ChromatographySimulator extends Application {
                                 // Column reaches 100% damage after many thousands of calls to damageColumn()
                                 // The amount of time this takes depends on how badly the column's max temp is exceeded
                                 if (MachineSettings.columnMaxTempExceeded()) MachineSettings.damageColumn();
-
-                                // Update split ratio
-                                MachineSettings.splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
 
                                 // Update ovenTempProperty & check if temp is ramping or cooling, then nudge temp
                                 MachineSettings.ovenTempProperty.set(MachineSettings.OVEN_TEMPERATURE);
@@ -3336,8 +3308,6 @@ public class ChromatographySimulator extends Application {
             };
         });
 
-
-
         // UTILITY BUTTON
         Button utilityButton = new Button("utility");
         SimpleBooleanProperty toggleProp = new SimpleBooleanProperty(true);
@@ -3351,7 +3321,7 @@ public class ChromatographySimulator extends Application {
             System.out.println("Max heap memory: " + maxMemory + " bytes");*/
         });
 
-        // UI-VIEW-PANEL PARENT NODE
+        // UI-VIEW-PANEL PARENT NODE -- Stores the buttons which change the UI View
         VBox uiViewPanel= new VBox();
         HBox zoomButtons1 = new HBox(zoomInButton,clickAndDragZoomButton,zoomOutButton);
         zoomButtons1.setSpacing(10);
@@ -3366,7 +3336,7 @@ public class ChromatographySimulator extends Application {
         uiViewPanel.setPrefWidth(140);
 
 
-        // CONTROLS ORDER
+        // CONTROLS ORDER -- To change the order of the buttons in the UI, change the order of these lines of code
         // LEFT CONTROLS BUTTON ORDER
         leftControls.getChildren().add(createVSpacer());
         leftControls.getChildren().add(uiViewPanel);
@@ -3384,13 +3354,13 @@ public class ChromatographySimulator extends Application {
 //        leftControls.getChildren().add(utilityButton);
         leftControls.setAlignment(Pos.CENTER);
 
-
-
+        // First stage shown is splash screen
         showSplash(initStage);
 
 
-
-        // Run Simulator
+// CORE BUSINESS LOGIC
+    // Run() method is called on repeat every 50 ms (or 40, 30, 20, 10 ms if fast forwarded). All the core business
+    // logic is centered in run().
         simulationTimer.schedule(
                 new TimerTask() {
             double detectorSignal = 0;
@@ -3400,7 +3370,6 @@ public class ChromatographySimulator extends Application {
 
             @Override
             public void run() {
-//                System.out.println(casToChemical.size());
                 // Initialize Simulation in the Paused state
                 if (isInitialization) {
                     isPaused.set(true);
@@ -3409,12 +3378,13 @@ public class ChromatographySimulator extends Application {
 
                 // Check for pause
                 if (isPaused.get()) {
-                    // Don't generate new data points when paused
+                    // Don't generate new data points or run any business logic when simulation paused
                     return;
                 }
 
+                // Platform.runLater() ensures that any action inside the closure runs on the Java UI application thread
                 Platform.runLater(() -> {
-                    // Increment Internal Clock
+                    // Advance the internal simulation clock by 1 step
                     incCurrentTime();
 
                     // Column reaches 100% damage after many thousands of calls to damageColumn()
@@ -3453,9 +3423,6 @@ public class ChromatographySimulator extends Application {
                             peak.traverseColumn();
                         }
                     }
-
-                    // Update split ratio
-                    MachineSettings.splitRatioProperty.set(MachineSettings.SPLIT_RATIO);
 
                     // Iterate through all the peaks and remove them if they have already eluted
                     Iterator<Peak> peakIterator = MachineSettings.ANALYTES_IN_COLUMN.iterator();
