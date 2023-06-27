@@ -127,7 +127,7 @@
                         <id>default-cli</id>
                         <configuration>
                             <mainClass>
-                                com.karimbouchareb.chromatographysimulator/com.karimbouchareb.chromatographysimulator.ChromatographySimulator
+                                com.karimbouchareb.chromatographysimulator/com.karimbouchareb.chromatographysimulator.ChromatographySimulatorApp
                             </mainClass>
                             <launcher>app</launcher>
                             <jlinkZipName>app</jlinkZipName>
