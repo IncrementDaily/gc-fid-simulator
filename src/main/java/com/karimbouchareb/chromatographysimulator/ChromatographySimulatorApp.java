@@ -99,6 +99,14 @@ public class ChromatographySimulatorApp extends Application {
     private static ConcurrentHashMap<String,Chemical> casToChemical = new ConcurrentHashMap<>(8192);
     ArrayList<ChemicalView> finalUserInputs_ChemViews = new ArrayList<>();
 
+    /**
+     * In a JavaFX application, main() calls launch() which first calls {@link #init()} and then {@link #start(Stage)})}
+     */
+
+    public static void main(String[] args) {
+        launch();
+    }
+
 
 // TOP-LEVEL STATIC METHODS
     // INTERNAL CLOCK OF SIMULATION STATIC METHODS
@@ -3455,8 +3463,6 @@ public class ChromatographySimulatorApp extends Application {
         }, 0, FRAME_LENGTH_MS.get());
     }
 
-    public static void main(String[] args) {
-        launch();
-    }
+
 }
 
