@@ -100,15 +100,25 @@ public class ChromatographySimulatorApp extends Application {
     ArrayList<ChemicalView> finalUserInputs_ChemViews = new ArrayList<>();
 
     /**
-     * In a JavaFX application, main() calls launch() which first calls {@link #init()} and then {@link #start(Stage)})}
+     * In a JavaFX application, {@link #main(String[])} calls {@link #launch(String...)}.
+     *
+     * launch() first calls {@link #init()} and then, once init() is finished, it calls
+     * {@link #start(Stage)})}. start() contains the business logic of this application; aside from a few background
+     * tasks that cache objects, nearly all of the business logic occurs within the {@link #simulationTimer}.
+     *
+     * The simulationTimer.schedule() method sets up a TimerTask which calls run() repeatedly in this application. run()
+     * is specifically where nearly all of the core business logic of this application is contained. run() is called
+     * every 50 ms by default but this can change to 40, 30, 20, or 10 ms (see {@link #FRAME_LENGTH_MS}).
+     *
+     * launch() doesn't return anything until {@link #stop()} is called. stop() is called only
+     * after the user closes the application.
      */
-
     public static void main(String[] args) {
         launch();
     }
 
     /**
-     * init() run only once at beginning of application launch -- loads the splash screen with all its ui components
+     * {@link #init()} runs only once at application launch; it loads the splash screen with all of its ui components
      */
     @Override
     public void init() {
