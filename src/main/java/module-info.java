@@ -13,4 +13,6 @@ module com.karimbouchareb.chromatographysimulator {
 
     opens com.karimbouchareb.chromatographysimulator to javafx.base;
     exports com.karimbouchareb.chromatographysimulator to javafx.graphics;
+    exports com.karimbouchareb.chromatographysimulator.ui to javafx.graphics;
+    opens com.karimbouchareb.chromatographysimulator.ui to javafx.base;
 }
