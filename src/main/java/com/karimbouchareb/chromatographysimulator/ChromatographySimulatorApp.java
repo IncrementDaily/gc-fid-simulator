@@ -10,7 +10,6 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.WeakChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.collections.ObservableMap;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
@@ -61,7 +60,7 @@ import java.util.stream.DoubleStream;
 
 import static javafx.beans.binding.Bindings.bindContent;
 
-public class ChromatographySimulator extends Application {
+public class ChromatographySimulatorApp extends Application {
 // TOP-LEVEL FIELDS
     // DATA FIELDS
     private static final String CHEM_DATA_FILEPATH = "src/main/java/com/karimbouchareb/chromatographysimulator/ufz_LSERdataset.csv";
@@ -155,7 +154,7 @@ public class ChromatographySimulator extends Application {
     }
     private static ImageView makeImageView(String filePath) {
         ImageView imageView = null;
-        URL imageUrl = ChromatographySimulator.class.getClassLoader().getResource(filePath);
+        URL imageUrl = ChromatographySimulatorApp.class.getClassLoader().getResource(filePath);
         if (imageUrl != null) {
             Image image = new Image(imageUrl.toString());
             imageView = new ImageView(image);
