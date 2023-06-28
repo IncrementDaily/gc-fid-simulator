@@ -48,6 +48,7 @@ import org.kordamp.ikonli.fontawesome.FontAwesome;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign.MaterialDesign;
 
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.net.URL;
@@ -124,7 +125,7 @@ public class ChromatographySimulatorApp extends Application {
      * screen with each of its ui components.
      */
     @Override
-    public void init() {
+    public void init() throws FileNotFoundException {
         splashScreen.initSplashScreen();
     }
 

@@ -19,18 +19,24 @@ import javafx.util.Duration;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign.MaterialDesign;
 
+import java.io.FileNotFoundException;
+
 import static com.karimbouchareb.chromatographysimulator.ChromatographySimulatorApp.SCREEN_BOUNDS;
 import static com.karimbouchareb.chromatographysimulator.ChromatographySimulatorApp.makeImageView;
 
 public class SplashScreen {
     private StackPane splashScreenPane = new StackPane();
+    private static final String BACKGROUND_SCATTER_FILE = "backgroundPopulator.gif";
+    private static final String TRAVIS_HEAD_FILE = "travisHead.png";
+    private static final String TITLE_FILE = "title.png";
+    private static final String BASELINE_ANIMATION_FILE = "baselineAnimation.gif";
 
     /**
      * This is called when {@link ChromatographySimulatorApp#init()} is called. It inits each of the ui components of
      * the splash screen: {@link #initBackground()}, {@link #initTravisHead()}, {@link #initTitle()},
      * {@link #initBaselineAnimation(double, double)}, and {@link #initLaunchButton(double, ImageView)}
      */
-    public void initSplashScreen(){
+    public void initSplashScreen() throws FileNotFoundException {
         splashScreenPane.setBackground(Background.fill(Color.BLACK));
         // Background Scatter
         ImageView backgroundScatter = initBackground();
@@ -54,8 +60,9 @@ public class SplashScreen {
     /**
      * Initialize the rotating background image
      */
-    private ImageView initBackground(){
-        ImageView backgroundScatter = ChromatographySimulatorApp.makeImageView("backgroundPopulator.gif");
+    private ImageView initBackground() throws FileNotFoundException {
+        ImageView backgroundScatter = ChromatographySimulatorApp.makeImageView(BACKGROUND_SCATTER_FILE);
+        if (backgroundScatter == null) throw new FileNotFoundException("No file named " + BACKGROUND_SCATTER_FILE);
         RotateTransition rtBackground = new RotateTransition(Duration.millis(220000), backgroundScatter);
         rtBackground.setByAngle(360);
         rtBackground.setAutoReverse(true);
@@ -69,8 +76,9 @@ public class SplashScreen {
     /**
      * Initialize travis' head which fades in slowly, floats around from random point to point, and rotates slowly
      */
-    private ImageView initTravisHead(){
-        ImageView travisHead = ChromatographySimulatorApp.makeImageView("travisHead.png");
+    private ImageView initTravisHead() throws FileNotFoundException {
+        ImageView travisHead = ChromatographySimulatorApp.makeImageView(TRAVIS_HEAD_FILE);
+        if (travisHead == null) throw new FileNotFoundException("No file named " + TRAVIS_HEAD_FILE);
         travisHead.setPreserveRatio(true);
         travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
         FadeTransition ftTravisHead1 = new FadeTransition(Duration.millis(5000), travisHead);
@@ -106,8 +114,9 @@ public class SplashScreen {
     /**
      * Initialize the title text. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
-    private ImageView initTitle(){
-        ImageView title = ChromatographySimulatorApp.makeImageView("title.png");
+    private ImageView initTitle() throws FileNotFoundException {
+        ImageView title = ChromatographySimulatorApp.makeImageView(TITLE_FILE);
+        if (title == null) throw new FileNotFoundException("No file named " + TITLE_FILE);
         title.setPreserveRatio(true);
         title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
         title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
@@ -128,9 +137,10 @@ public class SplashScreen {
     /**
      * Initialize the baseline animation. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
-    private Pane initBaselineAnimation(double titleWidth, double titleHeight){
+    private Pane initBaselineAnimation(double titleWidth, double titleHeight) throws FileNotFoundException {
         Pane baselineAnimationPane = new Pane();
-        ImageView baselineAnimation = ChromatographySimulatorApp.makeImageView("wave.gif");
+        ImageView baselineAnimation = ChromatographySimulatorApp.makeImageView(BASELINE_ANIMATION_FILE);
+        if (baselineAnimation == null) throw new FileNotFoundException("No filed named " + BASELINE_ANIMATION_FILE);
         baselineAnimation.setRotate(1.8);
         baselineAnimation.setFitWidth(titleWidth*1.15);
         baselineAnimation.setFitHeight(titleHeight*0.65);
