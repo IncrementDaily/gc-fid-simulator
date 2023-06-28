@@ -1,7 +1,16 @@
 # YouTube Demo
 [![YouTube Demo](https://img.youtube.com/vi/wJbaDDReHaE/0.jpg)](https://www.youtube.com/watch?v=wJbaDDReHaE&t=1s)
 
-
+# Get It Running On Your Machine
+(1) Download and install intelliJ
+(2) Clone repo and open the project in intelliJ as a Maven Project (if the project won’t open as a maven project,
+right-click the pom.xml file inside intelliJ's project window and there should be something like 
+“Maven -> reload project” that will help intelliJ recognize this as a maven project).
+(3) Now, Maven should be able to build the project (hopefully, this is as easy as clicking the green hammer build 
+button in intelliJ). You might run into a problem where the build tool complains about “source 18” and not being compatible with 
+the current SDK. This project expects Java 18 SDK, so try to follow intelliJ’s suggestions and change things around in 
+the project settings, then it should build correctly.
+(4) Now you can run the project!
 
 # Implementation Details
 * * * 
