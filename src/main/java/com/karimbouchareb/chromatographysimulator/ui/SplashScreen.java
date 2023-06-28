@@ -39,11 +39,12 @@ public class SplashScreen {
      */
     public void initSplashScreen(){
         splashScreenPane.setBackground(Background.fill(Color.BLACK));
-        // These methods must be called in this sequential order to avoid NPEs
         initBackground();
         initTravisHead();
         initTitle();
-        initBaselineAnimation();
+        double titleWidth = title.getFitWidth();
+        double titleHeight = title.prefHeight(titleWidth);
+        initBaselineAnimation(titleWidth, titleHeight); // baseline animation's size depends on title's size
         initLaunchButton();
         // Place background, travis, baselineAnimation, title, and launch button into scene
         splashScreenPane.getChildren().addAll(backgroundScatter, travisHeadPane, baselineAnimationPane, titlePane, launchPane);
@@ -127,14 +128,14 @@ public class SplashScreen {
     /**
      * Initialize the baseline animation. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
-    private void initBaselineAnimation(){
+    private void initBaselineAnimation(double titleWidth, double titleHeight){
         baselineAnimationPane = new Pane();
         ImageView baselineAnimation = ChromatographySimulatorApp.makeImageView("wave.gif");
         baselineAnimation.setRotate(1.8);
-        baselineAnimation.setFitWidth(title.getFitWidth()*1.15);
-        baselineAnimation.setFitHeight(title.prefHeight(title.getFitWidth())*0.65);
+        baselineAnimation.setFitWidth(titleWidth*1.15);
+        baselineAnimation.setFitHeight(titleHeight*0.65);
         baselineAnimation.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - baselineAnimation.getFitWidth() / 2);
-        baselineAnimation.setY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2) - baselineAnimation.getFitHeight() / 2);
+        baselineAnimation.setY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (titleHeight/2) - baselineAnimation.getFitHeight() / 2);
         FadeTransition ftWave = new FadeTransition(Duration.millis(2500), baselineAnimation);
         ftWave.setFromValue(0.0);
         ftWave.setToValue(0.0);
