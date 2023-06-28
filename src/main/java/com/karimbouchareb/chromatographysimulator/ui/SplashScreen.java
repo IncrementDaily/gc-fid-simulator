@@ -24,28 +24,29 @@ import static com.karimbouchareb.chromatographysimulator.ChromatographySimulator
 
 public class SplashScreen {
     private StackPane splashScreenPane = new StackPane();
-    private ImageView title;
-    private Pane titlePane;
-    private Pane baselineAnimationPane;
-    private Pane travisHeadPane;
-    private ImageView backgroundScatter;
-    private Pane launchPane;
-    private ImageView travisHead;
 
     /**
      * This is called when {@link ChromatographySimulatorApp#init()} is called. It inits each of the ui components of
      * the splash screen: {@link #initBackground()}, {@link #initTravisHead()}, {@link #initTitle()},
-     * {@link #initBaselineAnimation()}, and {@link #initLaunchButton()}.
+     * {@link #initBaselineAnimation(double, double)}, and {@link #initLaunchButton(double, ImageView)}
      */
     public void initSplashScreen(){
         splashScreenPane.setBackground(Background.fill(Color.BLACK));
-        initBackground();
-        initTravisHead();
-        initTitle();
+        // Background Scatter
+        ImageView backgroundScatter = initBackground();
+        // Travis Head
+        ImageView travisHead = initTravisHead();
+        Pane travisHeadPane = new Pane(travisHead);
+        // Title
+        ImageView title = initTitle();
+        Pane titlePane = new Pane(title);
         double titleWidth = title.getFitWidth();
         double titleHeight = title.prefHeight(titleWidth);
-        initBaselineAnimation(titleWidth, titleHeight); // baseline animation's size depends on title's size
-        initLaunchButton();
+        // Baseline Animation
+        Pane baselineAnimationPane = initBaselineAnimation(titleWidth, titleHeight); // baseline animation's size depends on title's size
+        // Launch Button
+        Pane launchPane = initLaunchButton(titleHeight, travisHead); // launchButton's size depends on title's size and mutates travisHead
+
         // Place background, travis, baselineAnimation, title, and launch button into scene
         splashScreenPane.getChildren().addAll(backgroundScatter, travisHeadPane, baselineAnimationPane, titlePane, launchPane);
     }
@@ -53,8 +54,8 @@ public class SplashScreen {
     /**
      * Initialize the rotating background image
      */
-    private void initBackground(){
-        backgroundScatter = ChromatographySimulatorApp.makeImageView("backgroundPopulator.gif");
+    private ImageView initBackground(){
+        ImageView backgroundScatter = ChromatographySimulatorApp.makeImageView("backgroundPopulator.gif");
         RotateTransition rtBackground = new RotateTransition(Duration.millis(220000), backgroundScatter);
         rtBackground.setByAngle(360);
         rtBackground.setAutoReverse(true);
@@ -62,14 +63,14 @@ public class SplashScreen {
         rtBackground.play();
         backgroundScatter.setFitWidth(SCREEN_BOUNDS.getWidth()*4);
         backgroundScatter.setFitHeight(SCREEN_BOUNDS.getHeight()*3);
+        return backgroundScatter;
     }
 
     /**
      * Initialize travis' head which fades in slowly, floats around from random point to point, and rotates slowly
      */
-    private void initTravisHead(){
-        travisHeadPane = new Pane();
-        travisHead = ChromatographySimulatorApp.makeImageView("travisHead.png");
+    private ImageView initTravisHead(){
+        ImageView travisHead = ChromatographySimulatorApp.makeImageView("travisHead.png");
         travisHead.setPreserveRatio(true);
         travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
         FadeTransition ftTravisHead1 = new FadeTransition(Duration.millis(5000), travisHead);
@@ -99,15 +100,14 @@ public class SplashScreen {
             ttTravisHead.setToY(SCREEN_BOUNDS.getHeight() - Math.random()*SCREEN_BOUNDS.getHeight());
             ttTravisHead.play();
         });
-        travisHeadPane.getChildren().add(travisHead);
+        return travisHead;
     }
 
     /**
      * Initialize the title text. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
-    private void initTitle(){
-        titlePane = new Pane();
-        title = ChromatographySimulatorApp.makeImageView("title.png");
+    private ImageView initTitle(){
+        ImageView title = ChromatographySimulatorApp.makeImageView("title.png");
         title.setPreserveRatio(true);
         title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
         title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
@@ -122,14 +122,14 @@ public class SplashScreen {
             ftTitle2.setToValue(1.0);
             ftTitle2.play();
         });
-        titlePane.getChildren().add(title);
+        return title;
     }
 
     /**
      * Initialize the baseline animation. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
-    private void initBaselineAnimation(double titleWidth, double titleHeight){
-        baselineAnimationPane = new Pane();
+    private Pane initBaselineAnimation(double titleWidth, double titleHeight){
+        Pane baselineAnimationPane = new Pane();
         ImageView baselineAnimation = ChromatographySimulatorApp.makeImageView("wave.gif");
         baselineAnimation.setRotate(1.8);
         baselineAnimation.setFitWidth(titleWidth*1.15);
@@ -147,14 +147,15 @@ public class SplashScreen {
             ftWave2.play();
         });
         baselineAnimationPane.getChildren().add(baselineAnimation);
+        return baselineAnimationPane;
     }
 
     /**
      * Initialize the custom launch button which causes travisHead to rotate quickly and launches the main scene.
      * When clicked, launch button calls {@link #showMainStage()} to initialize the main stage and show the main scene.
      */
-    private void initLaunchButton(){
-        launchPane = new Pane();
+    private Pane initLaunchButton(double titleHeight, ImageView travisHead){
+        Pane launchPane = new Pane();
         VBox launch = new VBox();
         launch.setAlignment(Pos.CENTER);
         Button launchButton = new Button();
@@ -206,14 +207,15 @@ public class SplashScreen {
             ftLaunch2.play();
         });
         launch.setLayoutX(SCREEN_BOUNDS.getMinX() + (SCREEN_BOUNDS.getWidth()/2) - launchButton.getPrefWidth()/2);
-        launch.setLayoutY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (title.prefHeight(title.getFitWidth())/2)*1.5 - launch.getHeight() / 2);
+        launch.setLayoutY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (titleHeight/2)*1.5 - launch.getHeight() / 2);
         launch.getChildren().add(launchButton);
         launchPane.getChildren().add(launch);
+        return launchPane;
     }
 
     /**
      * Helper method that initializes the main stage, main scene, and shows the main scene in the application.
-     * Called by {@link #initLaunchButton()} which is called when user clicks the launch button in the splash screen.
+     * Called by {@link #initLaunchButton(double, ImageView)} which is called when user clicks the launch button in the splash screen.
      */
     private static void showMainStage() {
         ChromatographySimulatorApp.mainStage = new Stage(StageStyle.DECORATED);
