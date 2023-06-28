@@ -75,7 +75,10 @@ public class ChromatographySimulatorApp extends Application {
     private static double CURRENT_TIME = 0.0;  // elapsedTime in seconds
     private static SimpleBooleanProperty isPaused = new SimpleBooleanProperty(true);
 
-    // MAIN SCREEN FIELDS
+    // UI - SPLASH SCREEN STAGE FIELDS
+    SplashScreen splashScreen = new SplashScreen();
+
+    // UI - MAIN STAGE FIELDS
     public static Stage mainStage;
     private static final Screen SCREEN = Screen.getPrimary();
     public static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
@@ -84,12 +87,10 @@ public class ChromatographySimulatorApp extends Application {
     private static Map<Peak, XYChart.Series> peakToSolBandDataSeries = new ConcurrentHashMap<>(512);
     private static Map<XYChart.Series, Peak> solBandDataSeriesToPeak = new ConcurrentHashMap<>(512);
     private static SimpleIntegerProperty soluteBandCountProperty = new SimpleIntegerProperty(0);
-
-    // MAIN SCENE FIELDS
     public static Scene mainScene;
     public static BorderPane root;
 
-    // INJECT SCENE FIELDS
+    // UI - INJECT STAGE FIELDS
     private static final double PARETO_SCALE = 1.0;
     private static final double PARETO_SHAPE = 2.5;
     private static ObservableList<ChemicalView> obsListChemicalViews = FXCollections.observableArrayList();
@@ -97,10 +98,11 @@ public class ChromatographySimulatorApp extends Application {
     private static ConcurrentHashMap<String,Chemical> casToChemical = new ConcurrentHashMap<>(8192);
     ArrayList<ChemicalView> finalUserInputs_ChemViews = new ArrayList<>();
 
+
     /**
      * In a JavaFX application, {@link #main(String[])} calls {@link #launch(String...)}.
      *
-     * launch() first calls {@link #init()} and then, once init() is finished, it calls
+     * launch() first calls {@link Application#init()}. Once {@link #init()} is finished, it calls
      * {@link #start(Stage)})}. start() contains the business logic of this application; aside from a few background
      * tasks that cache objects, nearly all of the business logic occurs within the {@link #simulationTimer}.
      *
@@ -116,13 +118,14 @@ public class ChromatographySimulatorApp extends Application {
     }
 
     /**
-     * {@link #init()} runs only once at application launch.
+     * {@link Application#init()} runs only once at application launch.
      *
-     * {@link SplashScreen#splashScreenInit()} populates the splash screen with each of its ui components
+     * In this application, {@link #init()} runs {@link SplashScreen#initSplashScreen()}  which populates the splash
+     * screen with each of its ui components.
      */
     @Override
     public void init() {
-        SplashScreen.splashScreenInit();
+        splashScreen.initSplashScreen();
     }
 
 // TOP-LEVEL STATIC METHODS
@@ -922,7 +925,7 @@ public class ChromatographySimulatorApp extends Application {
 
     // This method called in start() method (which runs after init()) and shows splash screen
     private void showSplash(Stage initStage) {
-        Scene splashScene = new Scene(SplashScreen.splashScreenPane, SCREEN_BOUNDS.getWidth()*.98, SCREEN_BOUNDS.getHeight()*0.98);
+        Scene splashScene = new Scene(splashScreen.getRoot(),SCREEN_BOUNDS.getWidth()*.98,SCREEN_BOUNDS.getHeight()*0.98);
         initStage.setMaximized(true);
         initStage.setScene(splashScene);
         initStage.initStyle(StageStyle.DECORATED);
