@@ -32,15 +32,21 @@ public class SplashScreen {
      */
     public void initSplashScreen(){
         splashScreenPane.setBackground(Background.fill(Color.BLACK));
+        // Background Scatter
         ImageView backgroundScatter = initBackground();
-        Pane travisHeadPane = initTravisHead();
-        ImageView travisHead = (ImageView) travisHeadPane.getChildren().get(0);
-        Pane titlePane = initTitle();
-        ImageView title = (ImageView) titlePane.getChildren().get(0);
+        // Travis Head
+        ImageView travisHead = initTravisHead();
+        Pane travisHeadPane = new Pane(travisHead);
+        // Title
+        ImageView title = initTitle();
+        Pane titlePane = new Pane(title);
         double titleWidth = title.getFitWidth();
         double titleHeight = title.prefHeight(titleWidth);
+        // Baseline Animation
         Pane baselineAnimationPane = initBaselineAnimation(titleWidth, titleHeight); // baseline animation's size depends on title's size
+        // Launch Button
         Pane launchPane = initLaunchButton(titleHeight, travisHead); // launchButton's size depends on title's size and mutates travisHead
+
         // Place background, travis, baselineAnimation, title, and launch button into scene
         splashScreenPane.getChildren().addAll(backgroundScatter, travisHeadPane, baselineAnimationPane, titlePane, launchPane);
     }
@@ -63,8 +69,7 @@ public class SplashScreen {
     /**
      * Initialize travis' head which fades in slowly, floats around from random point to point, and rotates slowly
      */
-    private Pane initTravisHead(){
-        Pane travisHeadPane = new Pane();
+    private ImageView initTravisHead(){
         ImageView travisHead = ChromatographySimulatorApp.makeImageView("travisHead.png");
         travisHead.setPreserveRatio(true);
         travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
@@ -95,15 +100,13 @@ public class SplashScreen {
             ttTravisHead.setToY(SCREEN_BOUNDS.getHeight() - Math.random()*SCREEN_BOUNDS.getHeight());
             ttTravisHead.play();
         });
-        travisHeadPane.getChildren().add(travisHead);
-        return travisHeadPane;
+        return travisHead;
     }
 
     /**
      * Initialize the title text. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
-    private Pane initTitle(){
-        Pane titlePane = new Pane();
+    private ImageView initTitle(){
         ImageView title = ChromatographySimulatorApp.makeImageView("title.png");
         title.setPreserveRatio(true);
         title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
@@ -119,8 +122,7 @@ public class SplashScreen {
             ftTitle2.setToValue(1.0);
             ftTitle2.play();
         });
-        titlePane.getChildren().add(title);
-        return titlePane;
+        return title;
     }
 
     /**
