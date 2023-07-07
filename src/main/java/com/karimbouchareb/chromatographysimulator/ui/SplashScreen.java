@@ -6,8 +6,6 @@ import javafx.animation.RotateTransition;
 import javafx.animation.TranslateTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
-import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.image.ImageView;
@@ -19,17 +17,30 @@ import javafx.util.Duration;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign.MaterialDesign;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 
-import static com.karimbouchareb.chromatographysimulator.ChromatographySimulatorApp.SCREEN_BOUNDS;
-import static com.karimbouchareb.chromatographysimulator.ChromatographySimulatorApp.makeImageView;
+import static com.karimbouchareb.chromatographysimulator.ui.ScreenUtility.SCREEN_BOUNDS;
+import static com.karimbouchareb.chromatographysimulator.ui.ScreenUtility.makeImageView;
 
 public class SplashScreen {
-    private StackPane splashScreenPane = new StackPane();
+    private final StackPane splashScreenPane = new StackPane();
     private static final String BACKGROUND_SCATTER_FILE = "backgroundPopulator.gif";
     private static final String TRAVIS_HEAD_FILE = "travisHead.png";
     private static final String TITLE_FILE = "title.png";
     private static final String BASELINE_ANIMATION_FILE = "baselineAnimation.gif";
+
+    /**
+     * Returns the StackPane root container of the splash screen. This root container is needed during the construction
+     * of the splash screen scene that is made when {@link ChromatographySimulatorApp#showSplash(Stage)} is called
+     * [this link will work in-source but not in the final generated javadoc since showSplash is private].
+     * showSplash() cannot be called during {@link ChromatographySimulatorApp#init()} because the JavaFX application
+     * thread cannot run during calls to {@link javafx.application.Application#init()} and constructing scenes is done
+     * on the JavaFX application thread.
+     */
+    public StackPane getRoot(){
+        return splashScreenPane;
+    }
 
     /**
      * This is called when {@link ChromatographySimulatorApp#init()} is called. It inits each of the ui components of
@@ -58,11 +69,15 @@ public class SplashScreen {
     }
 
     /**
-     * Initialize the rotating background image
+     * Initialize the rotating background image.
      */
     private ImageView initBackground() throws FileNotFoundException {
-        ImageView backgroundScatter = ChromatographySimulatorApp.makeImageView(BACKGROUND_SCATTER_FILE);
-        if (backgroundScatter == null) throw new FileNotFoundException("No file named " + BACKGROUND_SCATTER_FILE);
+        ImageView backgroundScatter;
+        try {
+            backgroundScatter = makeImageView(BACKGROUND_SCATTER_FILE);
+        } catch (FileNotFoundException e){
+            throw new FileNotFoundException("No file named " + BACKGROUND_SCATTER_FILE + "; this file needed for background animation in splashScreen initialization");
+        }
         RotateTransition rtBackground = new RotateTransition(Duration.millis(220000), backgroundScatter);
         rtBackground.setByAngle(360);
         rtBackground.setAutoReverse(true);
@@ -74,11 +89,15 @@ public class SplashScreen {
     }
 
     /**
-     * Initialize travis' head which fades in slowly, floats around from random point to point, and rotates slowly
+     * Initialize travis' head which fades in slowly, floats around from random point to point, and rotates slowly.
      */
     private ImageView initTravisHead() throws FileNotFoundException {
-        ImageView travisHead = ChromatographySimulatorApp.makeImageView(TRAVIS_HEAD_FILE);
-        if (travisHead == null) throw new FileNotFoundException("No file named " + TRAVIS_HEAD_FILE);
+        ImageView travisHead;
+        try {
+            travisHead = makeImageView(TRAVIS_HEAD_FILE);
+        } catch (FileNotFoundException e){
+            throw new FileNotFoundException("No file named " + TRAVIS_HEAD_FILE + "; this file needed for travisHead animation in splashScreen initialization");
+        }
         travisHead.setPreserveRatio(true);
         travisHead.setFitWidth(SCREEN_BOUNDS.getWidth()*0.1);
         FadeTransition ftTravisHead1 = new FadeTransition(Duration.millis(5000), travisHead);
@@ -115,8 +134,12 @@ public class SplashScreen {
      * Initialize the title text. First fade transition holds it invisible for 2.5 seconds, then it fades in.
      */
     private ImageView initTitle() throws FileNotFoundException {
-        ImageView title = ChromatographySimulatorApp.makeImageView(TITLE_FILE);
-        if (title == null) throw new FileNotFoundException("No file named " + TITLE_FILE);
+        ImageView title;
+        try {
+            title = makeImageView(TITLE_FILE);
+        }catch (FileNotFoundException e) {
+            throw new FileNotFoundException("No file named " + TITLE_FILE + "; this file needed for title in splashScreen initialization");
+        }
         title.setPreserveRatio(true);
         title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
         title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
@@ -139,8 +162,12 @@ public class SplashScreen {
      */
     private Pane initBaselineAnimation(double titleWidth, double titleHeight) throws FileNotFoundException {
         Pane baselineAnimationPane = new Pane();
-        ImageView baselineAnimation = ChromatographySimulatorApp.makeImageView(BASELINE_ANIMATION_FILE);
-        if (baselineAnimation == null) throw new FileNotFoundException("No filed named " + BASELINE_ANIMATION_FILE);
+        ImageView baselineAnimation;
+        try {
+            baselineAnimation = makeImageView(BASELINE_ANIMATION_FILE);
+        }catch (FileNotFoundException e){
+            throw new FileNotFoundException("No filed named " + BASELINE_ANIMATION_FILE + "; this file needed for baseline animation in splashScreen initialization");
+        }
         baselineAnimation.setRotate(1.8);
         baselineAnimation.setFitWidth(titleWidth*1.15);
         baselineAnimation.setFitHeight(titleHeight*0.65);
@@ -235,17 +262,5 @@ public class SplashScreen {
         ChromatographySimulatorApp.mainStage.setMaximized(true);
         ChromatographySimulatorApp.mainStage.show();
         ChromatographySimulatorApp.lineChartSolBand.requestFocus(); // remove focus from clear solute bands button at startup
-    }
-
-    /**
-     * Returns the StackPane root container of the splash screen. This root container is needed during the construction
-     * of the splash screen scene that is made when {@link ChromatographySimulatorApp#showSplash(Stage)} is called
-     * [this link will work in-source but not in the final generated javadoc since showSplash is private].
-     * showSplash() cannot be called during {@link ChromatographySimulatorApp#init()} because the JavaFX application
-     * thread cannot run during calls to {@link javafx.application.Application#init()} and constructing scenes is done
-     * on the JavaFX application thread.
-     */
-    public StackPane getRoot(){
-        return splashScreenPane;
     }
 }

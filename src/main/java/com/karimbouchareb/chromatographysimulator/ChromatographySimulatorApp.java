@@ -16,7 +16,6 @@ import javafx.concurrent.Task;
 import javafx.concurrent.Worker;
 import javafx.geometry.*;
 import javafx.scene.Node;
-import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
@@ -31,7 +30,6 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.*;
 import javafx.stage.Modality;
-import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
@@ -51,7 +49,6 @@ import org.kordamp.ikonli.materialdesign.MaterialDesign;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -60,6 +57,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
 
+import static com.karimbouchareb.chromatographysimulator.ui.ScreenUtility.SCREEN_BOUNDS;
+import static com.karimbouchareb.chromatographysimulator.ui.ScreenUtility.makeImageView;
 import static javafx.beans.binding.Bindings.bindContent;
 
 public class ChromatographySimulatorApp extends Application {
@@ -81,8 +80,6 @@ public class ChromatographySimulatorApp extends Application {
 
     // UI - MAIN STAGE FIELDS
     public static Stage mainStage;
-    private static final Screen SCREEN = Screen.getPrimary();
-    public static final Rectangle2D SCREEN_BOUNDS = SCREEN.getVisualBounds();
     public static LineChart<Number, Number> lineChartSolBand;
     private static Map<Peak, ChangeListener> peakToSolBandChangeListener = new ConcurrentHashMap<>(512);
     private static Map<Peak, XYChart.Series> peakToSolBandDataSeries = new ConcurrentHashMap<>(512);
@@ -181,17 +178,7 @@ public class ChromatographySimulatorApp extends Application {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         return spacer;
     }
-    public static ImageView makeImageView(String filePath) {
-        ImageView imageView = null;
-        URL imageUrl = ChromatographySimulatorApp.class.getClassLoader().getResource(filePath);
-        if (imageUrl != null) {
-            Image image = new Image(imageUrl.toString());
-            imageView = new ImageView(image);
-            return imageView;
-        } else {
-            return null;
-        }
-    }
+
     private static String toHexString(Color color) {
         int r = (int) Math.round(color.getRed() * 255);
         int g = (int) Math.round(color.getGreen() * 255);
@@ -625,7 +612,7 @@ public class ChromatographySimulatorApp extends Application {
         private SimpleObjectProperty imageProperty;
         private SimpleDoubleProperty concentration = new SimpleDoubleProperty(0.0);
 
-        public ChemicalView(String casNumber, String chemicalName) {
+        public ChemicalView(String casNumber, String chemicalName) throws FileNotFoundException {
             this.casNumber = casNumber;
             this.chemicalName = new SimpleStringProperty(chemicalName);
             this.chemicalImage = makeImageView(casNumber + "noName.png").getImage();
@@ -1559,7 +1546,11 @@ public class ChromatographySimulatorApp extends Application {
             tableViewSetConcentrations.setEditable(true);
             tableViewSetConcentrations.getSelectionModel().setCellSelectionEnabled(true);
             tableViewSetConcentrations.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-            tableViewSetConcentrations.setPlaceholder(makeImageView("sorryNoData.png"));
+            try {
+                tableViewSetConcentrations.setPlaceholder(makeImageView("sorryNoData.png"));
+            } catch (FileNotFoundException e) {
+                // TODO: fix this
+            }
 
             // SET CONCENTRATIONS COLUMNS
                 // NAME COLUMN
@@ -1901,7 +1892,12 @@ public class ChromatographySimulatorApp extends Application {
             oscillatorTranslator.setAutoReverse(true);
             oscillatorTranslator.setInterpolator(Interpolator.LINEAR);
             // Tick Mark Background Image
-            ImageView tickmarkImage = makeImageView("tickmarks.png");
+            ImageView tickmarkImage = null;
+            try {
+                tickmarkImage = makeImageView("tickmarks.png");
+            } catch (FileNotFoundException e) {
+                // TODO: fix this
+            }
             tickmarkImage.setFitWidth(SCREEN_BOUNDS.getWidth()*0.20);
             // Set up the Injection MiniGame
             injectionMinigame.getChildren().addAll(tickmarkImage,targetBox,oscillator);
@@ -2203,7 +2199,12 @@ public class ChromatographySimulatorApp extends Application {
                         overlayPane.setPrefSize(mainStage.getWidth(), mainStage.getHeight());
                         overlayPane.setMouseTransparent(true);
                         // Loading animation
-                        ImageView loadingPeaks = makeImageView("peaksLoading.gif");
+                        ImageView loadingPeaks = null;
+                        try {
+                            loadingPeaks = makeImageView("peaksLoading.gif");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         loadingPeaks.setPreserveRatio(true);
                         loadingPeaks.fitWidthProperty().set(SCREEN_BOUNDS.getWidth()*0.18);
                         // Loading progress bar
@@ -2346,7 +2347,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         db1701Info.getDialogPane().setPrefWidth(450);
                         db1701Info.setHeaderText("DB-1701");
-                        ImageView stationaryPhase = makeImageView("DB-1701_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("DB-1701_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("14%: (poly)cyanopropylphenylsiloxane 86%: (poly)dimethylsiloxane");
@@ -2399,7 +2405,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         db225Info.getDialogPane().setPrefWidth(450);
                         db225Info.setHeaderText("DB-225");
-                        ImageView stationaryPhase = makeImageView("DB-225_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("DB-225_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("50%: (poly)cyanopropylphenylsiloxane 50%: (poly)dimethylsiloxane");
@@ -2453,7 +2464,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         hp5Info.getDialogPane().setPrefWidth(450);
                         hp5Info.setHeaderText("HP-5");
-                        ImageView stationaryPhase = makeImageView("HP-5_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("HP-5_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("5%: (poly)diphenylsiloxane 95%: (poly)dimethylsiloxane");
@@ -2506,7 +2522,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         rxi17Info.getDialogPane().setPrefWidth(450);
                         rxi17Info.setHeaderText("Rxi-17");
-                        ImageView stationaryPhase = makeImageView("Rxi-17_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("Rxi-17_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("50%: (poly)diphenylsiloxane 50%: (poly)dimethylsiloxane");
@@ -2559,7 +2580,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         rxi5SilInfo.getDialogPane().setPrefWidth(450);
                         rxi5SilInfo.setHeaderText("Rxi-5Sil");
-                        ImageView stationaryPhase = makeImageView("Rxi-5Sil_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("Rxi-5Sil_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("5%: 1,4-Bis(dimethylsiloxy)phenylene 95%: (poly)dimethylsiloxane");
@@ -2613,7 +2639,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         hpInnowaxInfo.getDialogPane().setPrefWidth(450);
                         hpInnowaxInfo.setHeaderText("HP-Innowax");
-                        ImageView stationaryPhase = makeImageView("HP-Innowax_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("HP-Innowax_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: try this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("100% Polyethyleneglycol (cross-linking not shown)");
@@ -2665,7 +2696,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         rtxOPPInfo.getDialogPane().setPrefWidth(450);
                         rtxOPPInfo.setHeaderText("Rtx-OPP");
-                        ImageView stationaryPhase = makeImageView("Rtx-OPP_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("Rtx-OPP_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("\"Similar to 20% (poly)methyltrifluoropropylsiloxane 80% dimethyl\"");
@@ -2718,7 +2754,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         rtx440Info.getDialogPane().setPrefWidth(450);
                         rtx440Info.setHeaderText("Rtx-440");
-                        ImageView stationaryPhase = makeImageView("Rtx-440_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("Rtx-440_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("\"Similar to 6% (poly)cyanopropylphenylsiloxane 94% dimethyl\"");
@@ -2771,7 +2812,12 @@ public class ChromatographySimulatorApp extends Application {
                         });
                         spbOctylInfo.getDialogPane().setPrefWidth(450);
                         spbOctylInfo.setHeaderText("SPB-Octyl");
-                        ImageView stationaryPhase = makeImageView("SPB-Octyl_stationaryPhase.jpg");
+                        ImageView stationaryPhase = null;
+                        try {
+                            stationaryPhase = makeImageView("SPB-Octyl_stationaryPhase.jpg");
+                        } catch (FileNotFoundException ex) {
+                            // TODO: fix this
+                        }
                         stationaryPhase.setPreserveRatio(true);
                         stationaryPhase.setFitHeight(300.0);
                         Label genInfo = new Label("50%: (poly)octylsiloxane 50%: (poly)dimethylsiloxane");
