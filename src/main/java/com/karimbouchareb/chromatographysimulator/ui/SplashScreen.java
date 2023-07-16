@@ -48,7 +48,7 @@ public class SplashScreen {
      * the splash screen: {@link #initBackground()}, {@link #initTravisHead()}, {@link #initTitle()},
      * {@link #initBaselineAnimation(double, double)}, and {@link #initLaunchButton(double, ImageView)}
      */
-    public void initSplashScreen() throws FileNotFoundException {
+    public void initSplashScreen(ChromatographySimulatorApp csa) throws FileNotFoundException {
         splashScreenPane.setBackground(Background.fill(Color.BLACK));
         // Background Scatter
         ImageView backgroundScatter = initBackground();
@@ -63,7 +63,7 @@ public class SplashScreen {
         // Baseline Animation
         Pane baselineAnimationPane = initBaselineAnimation(titleWidth, titleHeight); // baseline animation's size depends on title's size
         // Launch Button
-        Pane launchPane = initLaunchButton(titleHeight, travisHead); // launchButton's size depends on title's size and mutates travisHead
+        Pane launchPane = initLaunchButton(titleHeight, travisHead, csa); // launchButton's size depends on title's size and mutates travisHead
 
         // Place background, travis, baselineAnimation, title, and launch button into scene
         splashScreenPane.getChildren().addAll(backgroundScatter, travisHeadPane, baselineAnimationPane, titlePane, launchPane);
@@ -150,7 +150,7 @@ public class SplashScreen {
     }
 
     /**
-     * Initialize the baseline animation. First fade transition holds it invisible for 2.5 seconds, then it fades in.
+     * Initialize the squiggle under the title.
      */
     private Pane initBaselineAnimation(double titleWidth, double titleHeight) throws FileNotFoundException {
         Pane baselineAnimationPane = new Pane();
@@ -174,7 +174,7 @@ public class SplashScreen {
      * Initialize the custom launch button which causes travisHead to rotate quickly and launches the main scene.
      * When clicked, launch button calls {@link #showMainStage()} to initialize the main stage and show the main scene.
      */
-    private Pane initLaunchButton(double titleHeight, ImageView travisHead){
+    public Pane initLaunchButton(double titleHeight, ImageView travisHead, ChromatographySimulatorApp csa){
         Pane launchPane = new Pane();
         VBox launch = new VBox();
         launch.setAlignment(Pos.CENTER);
@@ -212,7 +212,7 @@ public class SplashScreen {
             fadeSplash.setToValue(0.0);
             fadeSplash.play();
             fadeSplash.setOnFinished(actionEvent -> {
-                showMainStage(); // Leave splash screen and show main stage
+                csa.showMainStage(); // Leave splash screen and show main stage
                 launchButton.sceneProperty().get().getWindow().hide();
             });
         });
@@ -222,20 +222,6 @@ public class SplashScreen {
         launch.getChildren().add(launchButton);
         launchPane.getChildren().add(launch);
         return launchPane;
-    }
-
-    /**
-     * Helper method that initializes the main stage, main scene, and shows the main scene in the application.
-     * Called by {@link #initLaunchButton(double, ImageView)} which is called when user clicks the launch button in the splash screen.
-     */
-    private static void showMainStage() {
-        ChromatographySimulatorApp.mainStage = new Stage(StageStyle.DECORATED);
-        ChromatographySimulatorApp.mainStage.setTitle("Gas Chromatography Simulator");
-        ChromatographySimulatorApp.mainScene = new Scene(ChromatographySimulatorApp.root, SCREEN_BOUNDS.getWidth()*0.98, SCREEN_BOUNDS.getHeight()*0.98);
-        ChromatographySimulatorApp.mainStage.setScene(ChromatographySimulatorApp.mainScene);
-        ChromatographySimulatorApp.mainStage.setMaximized(true);
-        ChromatographySimulatorApp.mainStage.show();
-        ChromatographySimulatorApp.lineChartSolBand.requestFocus(); // remove focus from clear solute bands button at startup
     }
 
     private void fadeIn(Node node){

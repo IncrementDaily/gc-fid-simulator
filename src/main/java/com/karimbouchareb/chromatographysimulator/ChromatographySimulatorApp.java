@@ -79,14 +79,14 @@ public class ChromatographySimulatorApp extends Application {
     SplashScreen splashScreen = new SplashScreen();
 
     // UI - MAIN STAGE FIELDS
-    public static Stage mainStage;
+    public Stage mainStage;
     public static LineChart<Number, Number> lineChartSolBand;
     private static Map<Peak, ChangeListener> peakToSolBandChangeListener = new ConcurrentHashMap<>(512);
     private static Map<Peak, XYChart.Series> peakToSolBandDataSeries = new ConcurrentHashMap<>(512);
     private static Map<XYChart.Series, Peak> solBandDataSeriesToPeak = new ConcurrentHashMap<>(512);
     private static SimpleIntegerProperty soluteBandCountProperty = new SimpleIntegerProperty(0);
-    public static Scene mainScene;
-    public static BorderPane root;
+    public Scene mainScene;
+    public BorderPane root;
 
     // UI - INJECT STAGE FIELDS
     private static final double PARETO_SCALE = 1.0;
@@ -123,7 +123,22 @@ public class ChromatographySimulatorApp extends Application {
      */
     @Override
     public void init() throws FileNotFoundException {
-        splashScreen.initSplashScreen();
+        splashScreen.initSplashScreen(this);
+    }
+
+    /**
+     * Helper method that initializes the main stage, main scene, and shows the main scene in the application.
+     * Called by {@link #initLaunchButton(double, ImageView)} which is called when user clicks the launch button in the
+     * splash screen.
+     */
+    public void showMainStage() {
+        mainStage = new Stage(StageStyle.DECORATED);
+        mainStage.setTitle("Gas Chromatography Simulator");
+        mainScene = new Scene(root, SCREEN_BOUNDS.getWidth()*0.98, SCREEN_BOUNDS.getHeight()*0.98);
+        mainStage.setScene(mainScene);
+        mainStage.setMaximized(true);
+        mainStage.show();
+        lineChartSolBand.requestFocus(); // remove focus from clear solute bands button at startup
     }
 
 // TOP-LEVEL STATIC METHODS
