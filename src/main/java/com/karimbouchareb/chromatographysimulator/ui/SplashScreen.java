@@ -6,6 +6,7 @@ import javafx.animation.RotateTransition;
 import javafx.animation.TranslateTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.image.ImageView;
@@ -144,16 +145,7 @@ public class SplashScreen {
         title.setFitWidth(SCREEN_BOUNDS.getWidth()*0.58);
         title.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - title.getFitWidth() / 2);
         title.setY(SCREEN_BOUNDS.getMinY() + SCREEN_BOUNDS.getHeight() / 2 - title.prefHeight(title.getFitWidth()) / 2);
-        FadeTransition ftTitle = new FadeTransition(Duration.millis(2500), title);
-        ftTitle.setFromValue(0.0);
-        ftTitle.setToValue(0.0);
-        ftTitle.play();
-        ftTitle.setOnFinished(e->{
-            FadeTransition ftTitle2 = new FadeTransition(Duration.millis(1000), title);
-            ftTitle2.setFromValue(0.0);
-            ftTitle2.setToValue(1.0);
-            ftTitle2.play();
-        });
+        fadeIn(title);
         return title;
     }
 
@@ -173,16 +165,7 @@ public class SplashScreen {
         baselineAnimation.setFitHeight(titleHeight*0.65);
         baselineAnimation.setX(SCREEN_BOUNDS.getMinX() + SCREEN_BOUNDS.getWidth() / 2 - baselineAnimation.getFitWidth() / 2);
         baselineAnimation.setY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (titleHeight/2) - baselineAnimation.getFitHeight() / 2);
-        FadeTransition ftWave = new FadeTransition(Duration.millis(2500), baselineAnimation);
-        ftWave.setFromValue(0.0);
-        ftWave.setToValue(0.0);
-        ftWave.play();
-        ftWave.setOnFinished(e->{
-            FadeTransition ftWave2 = new FadeTransition(Duration.millis(1000), baselineAnimation);
-            ftWave2.setFromValue(0.0);
-            ftWave2.setToValue(1.0);
-            ftWave2.play();
-        });
+        fadeIn(baselineAnimation);
         baselineAnimationPane.getChildren().add(baselineAnimation);
         return baselineAnimationPane;
     }
@@ -233,16 +216,7 @@ public class SplashScreen {
                 launchButton.sceneProperty().get().getWindow().hide();
             });
         });
-        FadeTransition ftLaunch = new FadeTransition(Duration.millis(2500), launchButton);
-        ftLaunch.setFromValue(0.0);
-        ftLaunch.setToValue(0.0);
-        ftLaunch.play();
-        ftLaunch.setOnFinished(e->{
-            FadeTransition ftLaunch2 = new FadeTransition(Duration.millis(1000), launchButton);
-            ftLaunch2.setFromValue(0.0);
-            ftLaunch2.setToValue(1.0);
-            ftLaunch2.play();
-        });
+        fadeIn(launchButton);
         launch.setLayoutX(SCREEN_BOUNDS.getMinX() + (SCREEN_BOUNDS.getWidth()/2) - launchButton.getPrefWidth()/2);
         launch.setLayoutY(SCREEN_BOUNDS.getMinY() + (SCREEN_BOUNDS.getHeight() / 2) + (titleHeight/2)*1.5 - launch.getHeight() / 2);
         launch.getChildren().add(launchButton);
@@ -263,4 +237,18 @@ public class SplashScreen {
         ChromatographySimulatorApp.mainStage.show();
         ChromatographySimulatorApp.lineChartSolBand.requestFocus(); // remove focus from clear solute bands button at startup
     }
+
+    private void fadeIn(Node node){
+        FadeTransition initializeAsInvisible = new FadeTransition(Duration.millis(2500), node);
+        initializeAsInvisible.setFromValue(0.0);
+        initializeAsInvisible.setToValue(0.0);
+        initializeAsInvisible.play();
+        initializeAsInvisible.setOnFinished(e->{
+            FadeTransition fadeIn = new FadeTransition(Duration.millis(1000), node);
+            fadeIn.setFromValue(0.0);
+            fadeIn.setToValue(1.0);
+            fadeIn.play();
+        });
+    }
+
 }
